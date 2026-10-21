@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Galaxy.QQBot.Test/Galaxy.QQBot.Test.csproj" />
+  <Project Path="Galaxy.QQBot/Galaxy.QQBot.csproj" />
+</Solution>
