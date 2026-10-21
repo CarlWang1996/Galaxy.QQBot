@@ -61,7 +61,7 @@ public class AccessTokenManager : IAccessTokenManager
             int expiresIn = 0;
             try
             {
-                var result = await _httpHelper.PostStringAsync($"{Constants.BaseUrl}app/getAppAccessToken", new { appId, clientSecret });
+                var result = await _httpHelper.PostWithOutTokenAsync($"{Constants.BaseUrl}app/getAppAccessToken", new { appId, clientSecret });
                 JObject response = JObject.Parse(result);
                 if (response.ContainsKey("code"))
                 {

@@ -127,25 +127,21 @@ public class WebSocketClient : IWebSocketClient
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    // result.CloseStatus 是 WebSocketCloseStatus 枚举（如 NormalClosure, EndpointUnavailable 等）
-                    // 但 QQ 的 4000+ 错误码实际上是在 CloseStatusDescription 中返回的，或者会直接发一个 Close 帧
                     var closeCode = (int)result.CloseStatus!;
                     var description = result.CloseStatusDescription;
-
-                    // 你可以将 (closeCode, description) 通过 OnDisconnected 事件抛给 SocketQQBot
                     await HandleCloseAsync($"Code: {closeCode}, Reason: {description}");
                     return;
                 }
             }
             catch (OperationCanceledException)
             {
-                break; // 正常取消
+                break;
             }
             catch (Exception ex)
             {
                 await TriggerDisconnectedAsync($"接收异常: {ex.Message}");
                 await AttemptReconnectAsync(token);
-                break; // 退出当前循环，重连成功后会启动新的 ReceiveLoop
+                break;
             }
         }
     }

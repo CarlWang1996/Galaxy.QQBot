@@ -3,6 +3,7 @@ using Galaxy.QQBot.Common.EventData;
 using Galaxy.QQBot.Identity;
 using Galaxy.QQBot.Tool;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -10,8 +11,6 @@ namespace Galaxy.QQBot.Bot;
 
 public class SocketQQBot : IDisposable
 {
-    private string appId = "102077650";
-    private string appSecret = "5Oi2Ni4QnBZyNnDe5X0TxRwRxT0Y6fEo";
     private readonly IAccessTokenManager _accessTokenManager;
     private readonly IWebSocketClient _webSocket;
     private readonly IHttpHelper _httpHelper;
@@ -21,17 +20,25 @@ public class SocketQQBot : IDisposable
     private int _heartBeatInterval = 0;
     private string sessionId = string.Empty;
     private static readonly object sLock = new object();
+    private readonly QQBotOptions _options;
 
     public SocketQQBot(
         IWebSocketClient webSocket, 
         IHttpHelper httpHelper,
         IAccessTokenManager accessTokenManager,
-        ILogger<SocketQQBot> logger)
+        ILogger<SocketQQBot> logger,
+        IOptions<QQBotOptions> options)
     {
         _webSocket = webSocket;
         _httpHelper = httpHelper;
         _accessTokenManager = accessTokenManager;
         _logger = logger;
+        
+        _options = options.Value;
+        if (string.IsNullOrEmpty(_options.AppId) || string.IsNullOrEmpty(_options.AppSecret))
+        {
+            throw new InvalidOperationException("QQBot 的 AppId 或 AppSecret 未在配置中设置。");
+        }
         _webSocket.OnMessageReceived += HandleMessageAsync;
         _webSocket.OnDisconnected += HandleDisconnectedAsync;
     }
@@ -136,9 +143,9 @@ public class SocketQQBot : IDisposable
 
     public async Task ConnectAsync()
     {
-        _ = _accessTokenManager.StartGetAccessToken(appId, appSecret, _source.Token);
+        _ = _accessTokenManager.StartGetAccessToken(_options.AppId, _options.AppSecret, _source.Token);
         await _accessTokenManager.WaitForTokenAsync(_source.Token);
-        string obj = await _httpHelper.GetWithTokenAsync($"{Constants.BaseUrl}gateway",_accessTokenManager.AccessToken);
+        string obj = await _httpHelper.GetAsync($"{Constants.BaseUrl}gateway",_accessTokenManager.AccessToken);
         JObject response = JObject.Parse(obj);
         await _webSocket.ConnectAsync(response["url"]!.Value<string>()!);
         _logger.LogInformation("连接成功");
@@ -150,7 +157,7 @@ public class SocketQQBot : IDisposable
         {
             token = $"QQBot {_accessTokenManager.AccessToken}",
             intents = Intents.GROUP_AND_C2C_EVENT | Intents.INTERACTION,
-            shard = new int[] { 0,1},
+            shard = new int[] { 0,_options.Shards},
             properties = new { }
         } };
         string json = JsonConvert.SerializeObject(payload);

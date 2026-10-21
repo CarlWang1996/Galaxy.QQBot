@@ -1,6 +1,4 @@
-﻿using Galaxy.QQBot.Bot;
-using Galaxy.QQBot.Extensions;
-using Galaxy.QQBot.Identity;
+﻿using Galaxy.QQBot.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -11,12 +9,12 @@ public class Program
     static async Task Main(string[] args)
     {
         var builder = Host.CreateApplicationBuilder(args);
-        builder.Services.AddQQBot();
+        builder.Services.AddQQBot(builder => 
+        {
+            builder.UseAppCredentials("102077650", "5Oi2Ni4QnBZyNnDe5X0TxRwRxT0Y6fEo").UseShards(1);
+        });
         builder.Services.AddLogging();
         var app = builder.Build();
-        var bot = app.Services.GetRequiredService<SocketQQBot>();
-        await bot.ConnectAsync();
-        await bot.LoginAsync();
         await app.RunAsync();
     }
 }
