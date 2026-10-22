@@ -1,11 +1,24 @@
-﻿namespace Galaxy.QQBot.Models.Upload;
+﻿using System.Text.Json.Serialization;
+
+namespace Galaxy.QQBot.Models.Upload;
 
 public class BotUploadPrepareRequest
 {
-    public int file_type { get; set; } = 0;
-    public string file_size { get; set; } = string.Empty;
-    public string file_name { get; set; } = string.Empty;
-    public string md5 { get; set; } = string.Empty;
-    public string sha1 { get; set; } = string.Empty;
-    public string md5_10m { get; set; } = string.Empty;
+    [JsonPropertyName("file_type")]
+    public int FileType { get; set; } = 0;
+
+    [JsonPropertyName("file_size")]
+    public string FileSize { get; set; } = string.Empty;
+
+    [JsonPropertyName("file_name")]
+    public string FileName { get; set; } = string.Empty;
+
+    [JsonPropertyName("md5")]
+    public string Md5 { get; set; } = string.Empty;
+
+    [JsonPropertyName("sha1")]
+    public string Sha1 { get; set; } = string.Empty;
+
+    [JsonPropertyName("md5_10m")]
+    public string Md510m { get; set; } = string.Empty;
 }

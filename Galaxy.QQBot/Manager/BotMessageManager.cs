@@ -129,20 +129,20 @@ public class BotMessageManager : IBotMessageManager
         var fileInfo = new FileInfo(filePath);
         var prepareReq = new BotUploadPrepareRequest
         {
-            file_name = Path.GetFileName(filePath),
-            file_size = fileInfo.Length.ToString(),
-            file_type = fileType,
-            md5 = await FileMd5Helper.GetFullMd5Async(filePath),
-            sha1 = await FileHashHelper.GetFileSha1Async(filePath),
-            md5_10m = await FileMd5Helper.GetPartialMd5Async(filePath)
+            FileName = Path.GetFileName(filePath),
+            FileSize = fileInfo.Length.ToString(),
+            FileType = fileType,
+            Md5 = await FileMd5Helper.GetFullMd5Async(filePath),
+            Sha1 = await FileHashHelper.GetFileSha1Async(filePath),
+            Md510m = await FileMd5Helper.GetPartialMd5Async(filePath)
         };
 
         string prepareJson = await _httpHelper.PostAsync($"{baseUrl}/upload_prepare", _accessTokenManager.AccessToken, prepareReq);
         var prepareResp = _jsonHelper.DeserializeElement<BotUploadPrepareResponse>(prepareJson)!;
         using Stream stream = File.OpenRead(filePath);
-        foreach (var block in prepareResp.parts.OrderBy(s => s.index))
+        foreach (var block in prepareResp.Parts.OrderBy(s => s.Index))
         {
-            byte[] blockBuffer = new byte[int.Parse(block.block_size)];
+            byte[] blockBuffer = new byte[int.Parse(block.BlockSize)];
             int n = await stream.ReadAsync(blockBuffer.AsMemory(0, blockBuffer.Length));
             if (n == 0)
             {
@@ -151,7 +151,7 @@ public class BotMessageManager : IBotMessageManager
 
             byte[] exactData = new byte[n];
             Array.Copy(blockBuffer, exactData, n);
-            await _httpHelper.PutAsyncWithoutToken(block.presigned_url, exactData);
+            await _httpHelper.PutAsyncWithoutToken(block.PresignedUrl, exactData);
             using var md5 = System.Security.Cryptography.MD5.Create();
             string blockMd5 = Convert.ToHexString(md5.ComputeHash(exactData)).ToLowerInvariant();
             await _httpHelper.PostAsync(
@@ -159,8 +159,8 @@ public class BotMessageManager : IBotMessageManager
                 _accessTokenManager.AccessToken,
                 new
                 {
-                    upload_id = prepareResp.upload_id,
-                    part_index = block.index,
+                    upload_id = prepareResp.UploadId,
+                    part_index = block.Index,
                     block_size = n.ToString(),
                     md5 = blockMd5
                 });
@@ -170,12 +170,12 @@ public class BotMessageManager : IBotMessageManager
         {
             file_type = fileType,
             srv_send_msg = sendMsg,
-            upload_id = prepareResp.upload_id,
+            upload_id = prepareResp.UploadId,
             file_name = Path.GetFileName(filePath)
         };
 
         string mergeJson = await _httpHelper.PostAsync($"{baseUrl}/files", _accessTokenManager.AccessToken, mergeReq);
         var mergeResp = _jsonHelper.DeserializeElement<BotUploadResponse>(mergeJson);
-        return mergeResp?.file_info!;
+        return mergeResp?.FileInfo!;
     }
 }

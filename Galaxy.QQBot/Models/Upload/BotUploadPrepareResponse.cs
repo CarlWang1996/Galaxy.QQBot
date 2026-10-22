@@ -1,23 +1,43 @@
-﻿namespace Galaxy.QQBot.Models.Upload;
+﻿using System.Text.Json.Serialization;
+
+namespace Galaxy.QQBot.Models.Upload;
 
 public class BotUploadPrepareResponse
 {
-    public string upload_id { get; set; } = string.Empty;
-    public string block_size { get; set; } = string.Empty;
-    public BotUploadPart[] parts { get; set; } = [];
-    public BotUploadConfig config { get; set; } = null!;
+    [JsonPropertyName("upload_id")]
+    public string UploadId { get; set; } = string.Empty;
+
+    [JsonPropertyName("block_size")]
+    public string BlockSize { get; set; } = string.Empty;
+
+    [JsonPropertyName("parts")]
+    public BotUploadPart[] Parts { get; set; } = [];
+
+    [JsonPropertyName("config")]
+    public BotUploadConfig Config { get; set; } = null!;
 }
 
 public class BotUploadPart
 {
-    public int index { get; set; } = 0;
-    public string presigned_url { get; set; } = string.Empty;
-    public string block_size { get; set; } = string.Empty;
+    [JsonPropertyName("index")]
+    public int Index { get; set; } = 0;
+
+    [JsonPropertyName("presigned_url")]
+    public string PresignedUrl { get; set; } = string.Empty;
+
+    [JsonPropertyName("block_size")]
+    public string BlockSize { get; set; } = string.Empty;
 }
 
 public class BotUploadConfig
 {
-    public int concurrency { get; set; } = 0;
-    public int retry_timeout { get; set; } = 0;
-    public int retry_delay { get; set; } = 0;
+
+    [JsonPropertyName("concurrency")]
+    public int Concurrency { get; set; } = 0;
+
+    [JsonPropertyName("retry_timeout")]
+    public int RetryTimeout { get; set; } = 0;
+
+    [JsonPropertyName("retry_delay")]
+    public int RetryDelay { get; set; } = 0;
 }
