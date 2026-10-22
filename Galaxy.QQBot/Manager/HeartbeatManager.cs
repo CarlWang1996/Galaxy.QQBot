@@ -5,19 +5,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Galaxy.QQBot.Manager;
 
-public interface IHeartbeatManager
+public class HeartbeatManager
 {
-    Task RunAsync(CancellationToken token);
-}
-
-public class HeartbeatManager: IHeartbeatManager
-{
-    private readonly IWebSocketClient _webSocket;
+    private readonly WebSocketClient _webSocket;
     private readonly BotSessionContext _context;
     private readonly ILogger _logger;
 
     public HeartbeatManager(
-        IWebSocketClient webSocket,
+        WebSocketClient webSocket,
         BotSessionContext context,
         ILoggerFactory factory)
     {

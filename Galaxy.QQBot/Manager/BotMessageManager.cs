@@ -5,37 +5,12 @@ using Galaxy.QQBot.Tool;
 
 namespace Galaxy.QQBot.Manager;
 
-public interface IBotMessageManager
+public class BotMessageManager
 {
-    Task SendC2cMessageAsync(
-        string userId,
-        string? content = null,
-        string? messageId = null,
-        string? eventId = null,
-        int? sequence = null,
-        string? filePath = null,
-        BotMarkdown? markdown = null,
-        BotKeyboard? keyboard = null);
+    private readonly HttpHelper _httpHelper;
+    private readonly AccessTokenManager _accessTokenManager;
 
-    Task SendGroupMessageAsync(
-        string groupId,
-        string? content = null,
-        string? messageId = null,
-        string? eventId = null,
-        int? sequence = null,
-        string? filePath = null,
-        BotMarkdown? markdown = null,
-        BotKeyboard? keyboard = null);
-
-    Task ResponedAsync(string eventId);
-}
-
-public class BotMessageManager : IBotMessageManager
-{
-    private readonly IHttpHelper _httpHelper;
-    private readonly IAccessTokenManager _accessTokenManager;
-
-    public BotMessageManager(IHttpHelper httpHelper, IAccessTokenManager accessTokenManager)
+    public BotMessageManager(HttpHelper httpHelper, AccessTokenManager accessTokenManager)
     {
         _httpHelper = httpHelper;
         _accessTokenManager = accessTokenManager;

@@ -5,26 +5,19 @@ using System.Text.Json;
 
 namespace Galaxy.QQBot.Manager;
 
-public interface IAccessTokenManager
-{
-    string AccessToken { get; }
-    Task<string> WaitForTokenAsync(CancellationToken ct = default);
-    Task StartGetAccessToken(string appId, string clientSecret, CancellationToken clt);
-}
 
-public class AccessTokenManager : IAccessTokenManager
+public class AccessTokenManager
 {
-    private readonly IHttpHelper _httpHelper;
+    private readonly HttpHelper _httpHelper;
     private readonly ILogger _logger;
     private readonly object _sync = new();
     private string _accessToken = string.Empty;
-    private TaskCompletionSource<string> _tokenReadyTcs =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource<string> _tokenReadyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public AccessTokenManager(IHttpHelper httpHelper, ILogger<AccessTokenManager> logger)
+    public AccessTokenManager(HttpHelper httpHelper, ILoggerFactory factory)
     {
         _httpHelper = httpHelper;
-        _logger = logger;
+        _logger = factory.CreateLogger<AccessTokenManager>();
     }
 
     public string AccessToken

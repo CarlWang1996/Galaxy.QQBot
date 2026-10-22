@@ -3,24 +3,7 @@ using System.Text;
 
 namespace Galaxy.QQBot.Tool;
 
-public interface IWebSocketClient : IAsyncDisposable
-{
-    bool IsConnected { get; }
-
-    event Func<string, Task>? OnMessageReceived;
-
-    event Func<string, Task>? OnDisconnected;
-
-    Task ConnectAsync(string url, CancellationToken cancellationToken = default);
-
-    Task SendAsync(string message, CancellationToken cancellationToken = default);
-
-    Task SendAsync(byte[] data, CancellationToken cancellationToken = default);
-
-    Task DisconnectAsync();
-}
-
-public class WebSocketClient : IWebSocketClient
+public class WebSocketClient
 {
     private ClientWebSocket? _webSocket;
     private readonly SemaphoreSlim _sendLock = new(1, 1);

@@ -12,10 +12,10 @@ internal sealed class ShardConnection : IAsyncDisposable
     private readonly int _shardTotal;
     private readonly BotSessionContext _context;
     private readonly ILogger _logger;
-    private readonly IWebSocketClient _webSocket;
-    private readonly IHttpHelper _httpHelper;
-    private readonly IAccessTokenManager _accessTokenManager;
-    private readonly IHeartbeatManager _heartbeatManager;
+    private readonly WebSocketClient _webSocket;
+    private readonly HttpHelper _httpHelper;
+    private readonly AccessTokenManager _accessTokenManager;
+    private readonly HeartbeatManager _heartbeatManager;
     private readonly CancellationTokenSource _linkedSource;
 
     private int _reconnecting = 0;
@@ -27,8 +27,8 @@ internal sealed class ShardConnection : IAsyncDisposable
         int shardId,
         int shardTotal,
         ILoggerFactory factory,
-        IHttpHelper httpHelper,
-        IAccessTokenManager accessTokenManager,
+        HttpHelper httpHelper,
+        AccessTokenManager accessTokenManager,
         CancellationToken parentToken)
     {
         _shardId = shardId;
