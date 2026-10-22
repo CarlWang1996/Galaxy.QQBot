@@ -2,11 +2,11 @@
 
 namespace Galaxy.QQBot.Models.Common;
 
-public class BotMessageScene
+public record class BotMessageScene
 {
     [JsonPropertyName("source")]
-    public string Source { get; set; } = string.Empty;
+    public string Source { get; init; } = string.Empty;
 
     [JsonPropertyName("ext")]
-    public string[] Ext { get; set; } = [];
+    public string[] Ext { get; init; } = [];
 }

@@ -2,7 +2,7 @@
 
 namespace Galaxy.QQBot.Models.Upload;
 
-public class BotUploadPrepareResponse
+internal class BotUploadPrepareResponse
 {
     [JsonPropertyName("upload_id")]
     public string UploadId { get; set; } = string.Empty;
@@ -17,7 +17,7 @@ public class BotUploadPrepareResponse
     public BotUploadConfig Config { get; set; } = null!;
 }
 
-public class BotUploadPart
+internal class BotUploadPart
 {
     [JsonPropertyName("index")]
     public int Index { get; set; } = 0;
@@ -29,7 +29,7 @@ public class BotUploadPart
     public string BlockSize { get; set; } = string.Empty;
 }
 
-public class BotUploadConfig
+internal class BotUploadConfig
 {
 
     [JsonPropertyName("concurrency")]

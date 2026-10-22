@@ -1,6 +1,6 @@
 ﻿namespace Galaxy.QQBot.Common;
 
-public enum OpCode
+internal enum OpCode
 {
     Dispatch = 0,
     Heartbeat = 1,

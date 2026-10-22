@@ -2,7 +2,7 @@
 
 namespace Galaxy.QQBot.Models.Upload;
 
-public class BotUploadRequest
+internal class BotUploadRequest
 {
     [JsonPropertyName("file_type")]
     public int? FileType { get; set; } = null;

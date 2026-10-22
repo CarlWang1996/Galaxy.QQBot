@@ -6,40 +6,40 @@ using System.Text.Json.Serialization;
 
 namespace Galaxy.QQBot.EventData;
 
-public class GroupEventData
+public record class GroupEventData
 {
     [JsonPropertyName("id")]
-    public string Id { get; set; } = string.Empty;
+    public string Id { get; init; } = string.Empty;
 
     [JsonPropertyName("author")]
-    public BotUser Author { get; set; } = null!;
+    public BotUser Author { get; init; } = null!;
 
     [JsonPropertyName("content")]
-    public string Content { get; set; } = string.Empty;
+    public string Content { get; init; } = string.Empty;
 
     [JsonPropertyName("group_openid")]
-    public string GroupOpenid { get; set; } = string.Empty;
+    public string GroupOpenid { get; init; } = string.Empty;
 
     [JsonPropertyName("timestamp")]
-    public string Timestamp { get; set; } = string.Empty;
+    public string Timestamp { get; init; } = string.Empty;
 
     [JsonPropertyName("message_type")]
-    public int MessageType { get; set; } = 0;
+    public int MessageType { get; init; } = 0;
 
     [JsonPropertyName("message_scene")]
-    public BotMessageScene MessageScene { get; set; } = null!;
+    public BotMessageScene MessageScene { get; init; } = null!;
 
     [JsonPropertyName("attachments")]
-    public BotMessageAttachment[] Attachments { get; set; } = [];
+    public BotMessageAttachment[] Attachments { get; init; } = [];
 
     [JsonPropertyName("mentions")]
-    public BotUser[] Mentions { get; set; } = [];
+    public BotUser[] Mentions { get; init; } = [];
 
     [JsonPropertyName("ark_data")]
-    public BotARKData? ArkData { get; set; } = null;
+    public BotARKData? ArkData { get; init; } = null;
 
     [JsonPropertyName("msg_elements")]
-    public BotMsgElement[] MsgElements { get; set; } = [];
+    public BotMsgElement[] MsgElements { get; init; } = [];
 
     [JsonIgnore]
     public BotMessageManager MessageManager { get; internal set; } = null!;

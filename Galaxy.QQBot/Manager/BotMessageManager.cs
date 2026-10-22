@@ -10,7 +10,7 @@ public class BotMessageManager
     private readonly HttpHelper _httpHelper;
     private readonly AccessTokenManager _accessTokenManager;
 
-    public BotMessageManager(HttpHelper httpHelper, AccessTokenManager accessTokenManager)
+    internal BotMessageManager(HttpHelper httpHelper, AccessTokenManager accessTokenManager)
     {
         _httpHelper = httpHelper;
         _accessTokenManager = accessTokenManager;

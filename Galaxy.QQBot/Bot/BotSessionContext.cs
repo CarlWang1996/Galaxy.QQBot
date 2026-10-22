@@ -1,6 +1,6 @@
 ﻿namespace Galaxy.QQBot.Bot;
 
-public class BotSessionContext
+internal class BotSessionContext
 {
     public int? LastS { get; set; }
 

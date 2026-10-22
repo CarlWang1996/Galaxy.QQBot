@@ -1,6 +1,6 @@
 ﻿using System.Security.Cryptography;
 
-public static class FileMd5Helper
+internal static class FileMd5Helper
 {
     public const long DefaultMaxBytes = 10_002_432;
     private const int BufferSize = 81920; // 80KB

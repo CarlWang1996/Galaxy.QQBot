@@ -2,26 +2,26 @@
 
 namespace Galaxy.QQBot.Models.Event;
 
-public class BotMsgElement
+public record class BotMsgElement
 {
     [JsonPropertyName("msg_idx")]
-    public string MsgIdx { get; set; } = string.Empty;
+    public string MsgIdx { get; init; } = string.Empty;
 
     [JsonPropertyName("author")]
-    public BotUser Author { get; set; } = null!;
+    public BotUser Author { get; init; } = null!;
 
     [JsonPropertyName("message_type")]
-    public int MessageType { get; set; } = 0;
+    public int MessageType { get; init; } = 0;
 
     [JsonPropertyName("content")]
-    public string Content { get; set; } = string.Empty;
+    public string Content { get; init; } = string.Empty;
 
     [JsonPropertyName("attachments")]
-    public BotMessageAttachment[] Attachments { get; set; } = [];
+    public BotMessageAttachment[] Attachments { get; init; } = [];
 
     [JsonPropertyName("ark_data")]
-    public BotARKData? ArkData { get; set; } = null;
+    public BotARKData? ArkData { get; init; } = null;
 
     [JsonPropertyName("msg_elements")]
-    public BotMsgElement[] MsgElements { get; set; } = [];
+    public BotMsgElement[] MsgElements { get; init; } = [];
 }

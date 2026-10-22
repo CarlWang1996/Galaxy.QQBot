@@ -2,7 +2,7 @@
 
 namespace Galaxy.QQBot.Tool;
 
-public static class JsonHelper
+internal static class JsonHelper
 {
     public static string Serialize<T>(T obj)
     {

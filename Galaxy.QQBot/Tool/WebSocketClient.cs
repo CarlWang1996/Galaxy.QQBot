@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Galaxy.QQBot.Tool;
 
-public class WebSocketClient
+internal class WebSocketClient
 {
     private ClientWebSocket? _webSocket;
     private readonly SemaphoreSlim _sendLock = new(1, 1);

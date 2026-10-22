@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 
 namespace Galaxy.QQBot.Tool;
 
-public class HttpHelper : IDisposable
+internal class HttpHelper : IDisposable
 {
     private readonly SocketsHttpHandler _httpClientHandler;
 

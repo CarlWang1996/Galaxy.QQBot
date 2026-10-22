@@ -5,13 +5,13 @@ using Microsoft.Extensions.Logging;
 
 namespace Galaxy.QQBot.Manager;
 
-public class HeartbeatManager
+internal class HeartbeatManager
 {
     private readonly WebSocketClient _webSocket;
     private readonly BotSessionContext _context;
     private readonly ILogger _logger;
 
-    public HeartbeatManager(WebSocketClient webSocket, BotSessionContext context, ILoggerFactory factory)
+    internal HeartbeatManager(WebSocketClient webSocket, BotSessionContext context, ILoggerFactory factory)
     {
         _webSocket = webSocket;
         _context = context;

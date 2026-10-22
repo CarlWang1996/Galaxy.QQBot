@@ -2,7 +2,7 @@
 
 namespace Galaxy.QQBot.Common;
 
-public class Payload
+internal class Payload
 {
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;

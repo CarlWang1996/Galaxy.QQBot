@@ -2,7 +2,7 @@
 
 namespace Galaxy.QQBot.Models.Upload;
 
-public class BotUploadResponse
+internal class BotUploadResponse
 {
     [JsonPropertyName("file_uuid")]
     public string FileUuid { get; set; } = string.Empty;

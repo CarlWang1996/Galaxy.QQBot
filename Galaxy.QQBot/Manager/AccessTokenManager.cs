@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace Galaxy.QQBot.Manager;
 
 
-public class AccessTokenManager
+internal class AccessTokenManager
 {
     private readonly HttpHelper _httpHelper;
     private readonly ILogger _logger;
@@ -14,7 +14,7 @@ public class AccessTokenManager
     private string _accessToken = string.Empty;
     private TaskCompletionSource<string> _tokenReadyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public AccessTokenManager(HttpHelper httpHelper, ILoggerFactory factory)
+    internal AccessTokenManager(HttpHelper httpHelper, ILoggerFactory factory)
     {
         _httpHelper = httpHelper;
         _logger = factory.CreateLogger<AccessTokenManager>();

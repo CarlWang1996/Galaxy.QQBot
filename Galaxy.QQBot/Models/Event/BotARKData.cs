@@ -2,17 +2,17 @@
 
 namespace Galaxy.QQBot.Models.Event;
 
-public class BotARKData
+public record class BotARKData
 {
     [JsonPropertyName("prompt")]
-    public string Prompt { get; set; } = string.Empty;
+    public string Prompt { get; init; } = string.Empty;
 
     [JsonPropertyName("ark_type")]
-    public string ArkType { get; set; } = string.Empty;
+    public string ArkType { get; init; } = string.Empty;
 
     [JsonPropertyName("ark_name")]
-    public string ArkName { get; set; } = string.Empty;
+    public string ArkName { get; init; } = string.Empty;
 
     [JsonPropertyName("fields")]
-    public object Fields { get; set; } = null!;
+    public object Fields { get; init; } = null!;
 }

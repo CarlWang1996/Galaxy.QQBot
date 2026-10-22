@@ -3,17 +3,17 @@ using System.Text.Json.Serialization;
 
 namespace Galaxy.QQBot.EventData;
 
-public class ReadyEventData
+public record class ReadyEventData
 {
     [JsonPropertyName("version")]
-    public int Version { get; set; } = 0;
+    public int Version { get; init; } = 0;
 
     [JsonPropertyName("session_id")]
-    public string SessionId { get; set; } = string.Empty;
+    public string SessionId { get; init; } = string.Empty;
 
     [JsonPropertyName("user")]
-    public BotUser User { get; set; } = null!;
+    public BotUser User { get; init; } = null!;
 
     [JsonPropertyName("shard")]
-    public int[] Shard { get; set; } = null!;
+    public int[] Shard { get; init; } = null!;
 }
