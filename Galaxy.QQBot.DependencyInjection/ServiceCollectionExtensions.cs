@@ -4,7 +4,7 @@ using Galaxy.QQBot.Tool;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace Galaxy.QQBot.Extensions;
+namespace Galaxy.QQBot.DependencyInjection;
 
 public static class ServiceCollectionExtensions
 {
