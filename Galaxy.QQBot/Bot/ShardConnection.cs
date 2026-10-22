@@ -19,12 +19,31 @@ internal sealed class ShardConnection : IAsyncDisposable
     private readonly AccessTokenManager _accessTokenManager;
     private readonly HeartbeatManager _heartbeatManager;
     private readonly CancellationTokenSource _linkedSource;
+    private readonly BotMessageManager _botMessageManager;
     private int _reconnecting = 0;
     private readonly object _heartbeatLock = new();
     private Task? _heartbeatTask;
     private CancellationTokenSource? _heartbeatCts;
 
-    public ShardConnection(int shardId, int shardTotal, ILoggerFactory factory, HttpHelper httpHelper, AccessTokenManager accessTokenManager, CancellationToken parentToken)
+    private readonly Action<C2cEventData>? _onC2cMessage;
+    private readonly Action<GroupEventData>? _onGroupAtMessage;
+    private readonly Action<GroupEventData>? _onGroupMessage;
+    private readonly Action<InteractionEventData>? _onInteraction;
+    private readonly Action<ReadyEventData>? _onReady;
+
+    public ShardConnection(
+        int shardId, 
+        int shardTotal, 
+        ILoggerFactory factory, 
+        HttpHelper httpHelper, 
+        AccessTokenManager accessTokenManager, 
+        CancellationToken parentToken,
+        BotMessageManager botMessageManager,
+        Action<C2cEventData>? onC2cMessage,
+        Action<GroupEventData>? onGroupAtMessage,
+        Action<GroupEventData>? onGroupMessage,
+        Action<InteractionEventData>? onInteraction,
+        Action<ReadyEventData>? onReady)
     {
         _shardId = shardId;
         _shardTotal = shardTotal;
@@ -32,11 +51,17 @@ internal sealed class ShardConnection : IAsyncDisposable
         _httpHelper = httpHelper;
         _accessTokenManager = accessTokenManager;
         _linkedSource = CancellationTokenSource.CreateLinkedTokenSource(parentToken);
+        _botMessageManager = botMessageManager;
         _context = new BotSessionContext();
         _webSocket = new WebSocketClient();
         _webSocket.OnMessageReceived += HandleMessageAsync;
         _webSocket.OnDisconnected += HandleDisconnectedAsync;
         _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory);
+        _onC2cMessage = onC2cMessage;
+        _onGroupAtMessage = onGroupAtMessage;
+        _onGroupMessage = onGroupMessage;
+        _onInteraction = onInteraction;
+        _onReady = onReady;
     }
 
     public async Task StartAsync()
@@ -287,6 +312,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                         ReadyEventData readyData = JsonHelper.DeserializeElement<ReadyEventData>(payload.D.ToString()!)!;
                         _logger.LogDebug("[shard {id}] 收到ready信息:{@data}", _shardId, readyData);
                         _context.SessionId = readyData.SessionId;
+                        _onReady?.Invoke(readyData);
                     }
                     catch (Exception ex)
                     {
@@ -302,8 +328,9 @@ internal sealed class ShardConnection : IAsyncDisposable
                     try
                     {
                         var data = JsonHelper.DeserializeElement<C2cEventData>(payload.D.ToString()!)!;
+                        data.MessageManager = _botMessageManager;
                         _logger.LogDebug("[shard {id}] 收到私聊消息:{@data}", _shardId, data);
-                        // TODO: 处理单聊消息
+                        _onC2cMessage?.Invoke(data);
                     }
                     catch (Exception ex)
                     {
@@ -315,8 +342,9 @@ internal sealed class ShardConnection : IAsyncDisposable
                     try
                     {
                         var data = JsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
+                        data.MessageManager = _botMessageManager;
                         _logger.LogDebug("[shard {id}] 收到群聊@消息:{@data}", _shardId, data);
-                        // TODO: 处理群聊艾特
+                        _onGroupAtMessage?.Invoke(data);
                     }
                     catch (Exception ex)
                     {
@@ -328,8 +356,9 @@ internal sealed class ShardConnection : IAsyncDisposable
                     try
                     {
                         var data = JsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
+                        data.MessageManager = _botMessageManager;
                         _logger.LogDebug("[shard {id}] 收到群聊消息:{@data}", _shardId, data);
-                        // TODO: 处理群聊消息
+                        _onGroupMessage?.Invoke(data);
                     }
                     catch (Exception ex)
                     {
@@ -341,8 +370,9 @@ internal sealed class ShardConnection : IAsyncDisposable
                     try
                     {
                         var data = JsonHelper.DeserializeElement<InteractionEventData>(payload.D.ToString()!)!;
+                        data.MessageManager = _botMessageManager;
                         _logger.LogDebug("[shard {id}] 收到按钮交互消息:{@data}", _shardId, data);
-                        // TODO: 处理交互事件
+                        _onInteraction?.Invoke(data);
                     }
                     catch (Exception ex)
                     {

@@ -1,4 +1,6 @@
-﻿using Galaxy.QQBot.Models.Event;
+﻿using Galaxy.QQBot.Manager;
+using Galaxy.QQBot.Models.Event;
+using Galaxy.QQBot.Models.Message;
 using System.Text.Json.Serialization;
 
 namespace Galaxy.QQBot.EventData;
@@ -37,4 +39,44 @@ public class InteractionEventData
 
     [JsonPropertyName("application_id")]
     public string ApplicationId { get; set; } = string.Empty;
+
+    [JsonIgnore]
+    internal BotMessageManager? MessageManager { get; set; }
+
+    [JsonIgnore]
+    internal int? Seq { get; set; }
+
+    public async Task ReplyAsync(string? content = null, BotMarkdown? markdown = null, BotKeyboard? keyboard = null, BotFileInfo? fileinfo = null)
+    {
+        if (MessageManager == null)
+        {
+            throw new InvalidOperationException("MessageManager 尚未初始化，无法直接回复。请确保消息是由 SocketQQBot 接收的。");
+        }
+
+        if(ChatType == 1)
+        {
+            await MessageManager.SendGroupMessageAsync(
+            groupId: GroupOpenid!,
+            eventId: Id,
+            sequence: Seq,
+            content: content,
+            markdown: markdown,
+            keyboard: keyboard,
+            fileinfo: fileinfo);
+        }
+        else if(ChatType == 2)
+        {
+            await MessageManager.SendC2cMessageAsync(
+            userId: UserOpenid!,
+            eventId: Id,
+            sequence: Seq,
+            content: content,
+            markdown: markdown,
+            keyboard: keyboard,
+            fileinfo: fileinfo
+            );
+        }
+        
+        Seq++;
+    }
 }

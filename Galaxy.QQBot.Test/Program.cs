@@ -11,13 +11,12 @@ public class Program
         Log.Logger = new LoggerConfiguration().MinimumLevel.Debug().WriteTo.Console().CreateLogger();
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
-            builder.ClearProviders();
-            builder.AddSerilog(Log.Logger,dispose:false);
-            builder.SetMinimumLevel(LogLevel.Debug);
+            builder.AddSerilog(dispose:true);
         });
         string appId = Environment.GetEnvironmentVariable("BotId", EnvironmentVariableTarget.Machine)!;
         string appSecret = Environment.GetEnvironmentVariable("BotSecret", EnvironmentVariableTarget.Machine)!;
         SocketQQBot bot = new SocketQQBot(appId, appSecret, loggerFactory);
+        bot.C2cMessages.Subscribe(async s => await s.ReplyAsync(s.Content));
         await bot.StartAsync();
         Console.Read();
     }

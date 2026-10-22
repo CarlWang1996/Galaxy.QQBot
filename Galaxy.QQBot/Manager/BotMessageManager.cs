@@ -22,11 +22,11 @@ public class BotMessageManager
         string? messageId = null,
         string? eventId = null,
         int? sequence = null,
-        string? filePath = null,
+        BotFileInfo? fileinfo = null,
         BotMarkdown? markdown = null,
         BotKeyboard? keyboard = null)
     {
-        return SendMessageAsync("user", userId, content, messageId, eventId, sequence, filePath, markdown, keyboard);
+        return SendMessageAsync("user", userId, content, messageId, eventId, sequence, fileinfo, markdown, keyboard);
     }
 
     public Task SendGroupMessageAsync(
@@ -35,11 +35,11 @@ public class BotMessageManager
         string? messageId = null,
         string? eventId = null,
         int? sequence = null,
-        string? filePath = null,
+        BotFileInfo? fileinfo = null,
         BotMarkdown? markdown = null,
         BotKeyboard? keyboard = null)
     {
-        return SendMessageAsync("group", groupId, content, messageId, eventId, sequence, filePath, markdown, keyboard);
+        return SendMessageAsync("group", groupId, content, messageId, eventId, sequence, fileinfo, markdown, keyboard);
     }
 
     private async Task SendMessageAsync(
@@ -49,7 +49,7 @@ public class BotMessageManager
         string? messageId,
         string? eventId,
         int? sequence,
-        string? filePath,
+        BotFileInfo? fileinfo,
         BotMarkdown? markdown,
         BotKeyboard? keyboard)
     {
@@ -63,11 +63,11 @@ public class BotMessageManager
             MsgSeq = sequence
         };
 
-        if (!string.IsNullOrEmpty(filePath))
+        if (fileinfo != null)
         {
-            string fileinfo = await UploadFileAsync(type, id, filePath, fileType: 4);
+            string info = await UploadFileAsync(type, id, fileinfo.FilePath, fileinfo.FileType,fileinfo.SrvSendMessage);
             request.MsgType = 7;
-            request.Media = new BotMediaInfo { FileInfo = fileinfo };
+            request.Media = new BotMediaInfo { FileInfo = info };
         }
         else if (markdown != null)
         {

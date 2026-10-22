@@ -1,8 +1,11 @@
 ﻿using Galaxy.QQBot.Common;
+using Galaxy.QQBot.EventData;
 using Galaxy.QQBot.Manager;
 using Galaxy.QQBot.Tool;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
 
 namespace Galaxy.QQBot.Bot;
 
@@ -23,6 +26,16 @@ public class SocketQQBot : IAsyncDisposable
     private Task? _tokenRefreshTask;
     private CancellationTokenSource? _tokenRefreshCts;
     public BotMessageManager Messages => _botMessageManager;
+    private readonly Subject<C2cEventData> _c2cSubject = new();
+    private readonly Subject<GroupEventData> _groupAtSubject = new();
+    private readonly Subject<GroupEventData> _groupSubject = new();
+    private readonly Subject<InteractionEventData> _interactionSubject = new();
+    private readonly Subject<ReadyEventData> _readySubject = new();
+    public IObservable<C2cEventData> C2cMessages => _c2cSubject.AsObservable();
+    public IObservable<GroupEventData> GroupAtMessages => _groupAtSubject.AsObservable();
+    public IObservable<GroupEventData> GroupMessages => _groupSubject.AsObservable();
+    public IObservable<InteractionEventData> Interactions => _interactionSubject.AsObservable();
+    public IObservable<ReadyEventData> Ready => _readySubject.AsObservable();
 
     public SocketQQBot(string appId, string appSecret, ILoggerFactory? factory = null)
     {
@@ -55,7 +68,17 @@ public class SocketQQBot : IAsyncDisposable
 
         for (int i = 0; i < total; i++)
         {
-            var shard = new ShardConnection( i, total, _loggerFactory, _httpHelper, _accessTokenManager, _source.Token);
+            var shard = new ShardConnection(i, total, 
+                _loggerFactory, 
+                _httpHelper, 
+                _accessTokenManager, 
+                _source.Token,
+                _botMessageManager,
+                onC2cMessage: data => _c2cSubject.OnNext(data),
+                onGroupMessage: data => _groupSubject.OnNext(data),
+                onGroupAtMessage: data => _groupAtSubject.OnNext(data),
+                onInteraction: data => _interactionSubject.OnNext(data),
+                onReady: data => _readySubject.OnNext(data));
             _shards.Add(shard);
             try
             {
@@ -129,5 +152,9 @@ public class SocketQQBot : IAsyncDisposable
         _shards.Clear();
         _httpHelper.Dispose();
         _source.Dispose();
+        _c2cSubject.Dispose();
+        _groupAtSubject.Dispose();
+        _groupSubject.Dispose();
+        _interactionSubject.Dispose();
     }
 }
