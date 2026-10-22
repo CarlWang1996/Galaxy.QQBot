@@ -16,15 +16,18 @@ public class HeartbeatManager: IHeartbeatManager
     private readonly IWebSocketClient _webSocket;
     private readonly BotSessionContext _context;
     private readonly ILogger _logger;
+    private readonly IJsonHelper _jsonHelper;
 
     public HeartbeatManager(
         IWebSocketClient webSocket,
         BotSessionContext context,
-        ILogger<HeartbeatManager> logger)
+        ILogger<HeartbeatManager> logger,
+        IJsonHelper jsonHelper)
     {
         _webSocket = webSocket;
         _context = context;
         _logger = logger;
+        _jsonHelper = jsonHelper;
     }
 
     public async Task RunAsync(CancellationToken token)
@@ -41,7 +44,7 @@ public class HeartbeatManager: IHeartbeatManager
                     op = (int)OpCode.Heartbeat,
                     d = _context.LastS!
                 };
-                string json = JsonConvert.SerializeObject(pay);
+                string json = _jsonHelper.Serialize(pay);
 
                 await _webSocket.SendAsync(json);
 

@@ -35,11 +35,13 @@ public class BotMessageManager : IBotMessageManager
 {
     private readonly IHttpHelper _httpHelper;
     private readonly IAccessTokenManager _accessTokenManager;
+    private readonly IJsonHelper _jsonHelper;
 
-    public BotMessageManager(IHttpHelper httpHelper, IAccessTokenManager accessTokenManager)
+    public BotMessageManager(IHttpHelper httpHelper, IAccessTokenManager accessTokenManager, IJsonHelper jsonHelper)
     {
         _httpHelper = httpHelper;
         _accessTokenManager = accessTokenManager;
+        _jsonHelper = jsonHelper;
     }
 
     public Task SendC2cMessageAsync(
@@ -137,7 +139,7 @@ public class BotMessageManager : IBotMessageManager
         };
 
         string prepareJson = await _httpHelper.PostAsync($"{baseUrl}/upload_prepare", _accessTokenManager.AccessToken, prepareReq);
-        var prepareResp = JsonConvert.DeserializeObject<BotUploadPrepareResponse>(prepareJson)!;
+        var prepareResp = _jsonHelper.DeserializeElement<BotUploadPrepareResponse>(prepareJson)!;
         using Stream stream = File.OpenRead(filePath);
         foreach (var block in prepareResp.parts.OrderBy(s => s.index))
         {
@@ -174,7 +176,7 @@ public class BotMessageManager : IBotMessageManager
         };
 
         string mergeJson = await _httpHelper.PostAsync($"{baseUrl}/files", _accessTokenManager.AccessToken, mergeReq);
-        var mergeResp = JsonConvert.DeserializeObject<BotUploadResponse>(mergeJson);
+        var mergeResp = _jsonHelper.DeserializeElement<BotUploadResponse>(mergeJson);
         return mergeResp?.file_info!;
     }
 }

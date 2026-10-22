@@ -12,6 +12,7 @@ namespace Galaxy.QQBot.Bot;
 
 public class SocketQQBot : IDisposable
 {
+    internal record GatewayResponse(string url);
     private readonly QQBotOptions _options;
     private readonly BotSessionContext _context;
     private readonly ILogger _logger;
@@ -64,8 +65,15 @@ public class SocketQQBot : IDisposable
         _httpHelper = new HttpHelper(new HttpClient());
         _jsonHelper = new JsonHelper();
         _accessTokenManager = new AccessTokenManager(_httpHelper,factory.CreateLogger<AccessTokenManager>());
-        _botMessageManager = new BotMessageManager(_httpHelper, _accessTokenManager);
-        _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory.CreateLogger<HeartbeatManager>());
+        _botMessageManager = new BotMessageManager(_httpHelper, _accessTokenManager,_jsonHelper);
+        _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory.CreateLogger<HeartbeatManager>(),_jsonHelper);
+        if (string.IsNullOrEmpty(_options.AppId) || string.IsNullOrEmpty(_options.AppSecret))
+        {
+            throw new InvalidOperationException("QQBot 的 AppId 或 AppSecret 未在配置中设置。");
+        }
+
+        _webSocket.OnMessageReceived += HandleMessageAsync;
+        _webSocket.OnDisconnected += HandleDisconnectedAsync;
     }
 
     private async Task HandleDisconnectedAsync(string arg)
@@ -99,7 +107,7 @@ public class SocketQQBot : IDisposable
 
     private async Task HandleMessageAsync(string arg)
     {
-        Payload payload = JsonConvert.DeserializeObject<Payload>(arg)!;
+        Payload payload = _jsonHelper.DeserializeElement<Payload>(arg)!;
 
         if (payload.op == (int)OpCode.Hello)
         {
@@ -115,7 +123,7 @@ public class SocketQQBot : IDisposable
 
                 try
                 {
-                    ReadyEventData readyData = JsonConvert.DeserializeObject<ReadyEventData>(payload.d.ToString());
+                    ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.d.ToString());
                     _context.SessionId = readyData.session_id;
                     _logger.LogInformation("Bot 登录成功 (READY)，SessionId: {sid}", readyData.session_id);
                 }
@@ -130,22 +138,22 @@ public class SocketQQBot : IDisposable
             }
             else if (payload.t == "C2C_MESSAGE_CREATE")
             {
-                C2cEventData data = JsonConvert.DeserializeObject<C2cEventData>(payload.d.ToString());
+                C2cEventData data = _jsonHelper.DeserializeElement<C2cEventData>(payload.d.ToString());
                 // TODO: 处理单聊消息
             }
             else if (payload.t == "GROUP_AT_MESSAGE_CREATE")
             {
-                GroupEventData data = JsonConvert.DeserializeObject<GroupEventData>(payload.d.ToString());
+                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.d.ToString());
                 // TODO: 处理群聊艾特
             }
             else if (payload.t == "GROUP_MESSAGE_CREATE")
             {
-                GroupEventData data = JsonConvert.DeserializeObject<GroupEventData>(payload.d.ToString());
+                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.d.ToString());
                 // TODO: 处理群聊消息
             }
             else if (payload.t == "INTERACTION_CREATE")
             {
-                InteractionEventData data = JsonConvert.DeserializeObject<InteractionEventData>(payload.d.ToString());
+                InteractionEventData data = _jsonHelper.DeserializeElement<InteractionEventData>(payload.d.ToString());
                 // TODO: 处理交互事件
             }
         }
@@ -156,8 +164,8 @@ public class SocketQQBot : IDisposable
         _ = _accessTokenManager.StartGetAccessToken(_options.AppId, _options.AppSecret, _source.Token);
         await _accessTokenManager.WaitForTokenAsync(_source.Token);
         string obj = await _httpHelper.GetAsync($"{Constants.BaseUrl}gateway", _accessTokenManager.AccessToken);
-        JObject response = JObject.Parse(obj);
-        await _webSocket.ConnectAsync(response["url"]!.Value<string>()!);
+        GatewayResponse response = _jsonHelper.DeserializeElement<GatewayResponse>(obj)!;
+        await _webSocket.ConnectAsync(response.url);
         _logger.LogInformation("连接成功");
     }
 
@@ -174,7 +182,7 @@ public class SocketQQBot : IDisposable
                 properties = new { }
             }
         };
-        string json = JsonConvert.SerializeObject(payload);
+        string json = _jsonHelper.Serialize(payload);
         await _webSocket.SendAsync(json);
     }
 
@@ -195,7 +203,7 @@ public class SocketQQBot : IDisposable
                 seq = _context.LastS
             }
         };
-        string json = JsonConvert.SerializeObject(pay);
+        string json = _jsonHelper.Serialize(pay);
         await _webSocket.SendAsync(json);
     }
 }
