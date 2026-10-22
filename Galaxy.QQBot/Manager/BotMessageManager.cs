@@ -1,8 +1,8 @@
 ﻿using Galaxy.QQBot.Common;
-using Galaxy.QQBot.EventData;
+using Galaxy.QQBot.Models.Message;
+using Galaxy.QQBot.Models.Upload;
 using Galaxy.QQBot.Tool;
 using Newtonsoft.Json;
-using System.Text.RegularExpressions;
 
 namespace Galaxy.QQBot.Manager;
 
@@ -15,8 +15,8 @@ public interface IBotMessageManager
         string? eventId = null,
         int? sequence = null,
         string? filePath = null,
-        BotMessageMarkdown? markdown = null,
-        BotKeyBoard? keyboard = null);
+        BotMarkdown? markdown = null,
+        BotKeyboard? keyboard = null);
     Task SendGroupMessageAsync(
         string groupId,
         string? content = null,
@@ -24,8 +24,8 @@ public interface IBotMessageManager
         string? eventId = null,
         int? sequence = null,
         string? filePath = null,
-        BotMessageMarkdown? markdown = null,
-        BotKeyBoard? keyboard = null);
+        BotMarkdown? markdown = null,
+        BotKeyboard? keyboard = null);
 
     Task ResponedAsync(string eventId);
 }
@@ -44,14 +44,14 @@ public class BotMessageManager : IBotMessageManager
     }
 
     public async Task SendC2cMessageAsync(
-    string userId,
-    string? content = null,
-    string? messageId = null,
-    string? eventId = null,
-    int? sequence = null,
-    string? filePath = null,
-    BotMessageMarkdown? markdown = null,
-    BotKeyBoard? keyboard = null)
+        string userId,
+        string? content = null,
+        string? messageId = null,
+        string? eventId = null,
+        int? sequence = null,
+        string? filePath = null,
+        BotMarkdown? markdown = null,
+        BotKeyboard? keyboard = null)
     {
         await SendMessageAsync("c2c", userId, content, messageId, eventId, sequence, filePath, markdown, keyboard);
     }
@@ -63,8 +63,8 @@ public class BotMessageManager : IBotMessageManager
         string? eventId = null,
         int? sequence = null,
         string? filePath = null,
-        BotMessageMarkdown? markdown = null,
-        BotKeyBoard? keyboard = null)
+        BotMarkdown? markdown = null,
+        BotKeyboard? keyboard = null)
     {
         
         await SendMessageAsync("group", groupId, content, messageId, eventId, sequence, filePath, markdown, keyboard);
@@ -78,8 +78,8 @@ public class BotMessageManager : IBotMessageManager
         string? eventId,
         int? sequence,
         string? filePath,
-        BotMessageMarkdown? markdown,
-        BotKeyBoard? keyboard)
+        BotMarkdown? markdown,
+        BotKeyboard? keyboard)
     {
         string urlType = type == "c2c" ? "user2" : "groups";
         string url = $"{Constants.BaseUrl}v2/{urlType}/{id}/messages";

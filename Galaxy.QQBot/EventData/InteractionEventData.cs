@@ -1,4 +1,4 @@
-﻿using Galaxy.QQBot.Common;
+﻿using Galaxy.QQBot.Models.Event;
 
 namespace Galaxy.QQBot.EventData;
 
