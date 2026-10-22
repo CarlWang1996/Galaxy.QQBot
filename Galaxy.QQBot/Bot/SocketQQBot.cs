@@ -21,24 +21,27 @@ public class SocketQQBot : IDisposable
     private string sessionId = string.Empty;
     private static readonly object sLock = new object();
     private readonly QQBotOptions _options;
+    private readonly IBotMessageManager _botMessageManager;
 
     public SocketQQBot(
         IWebSocketClient webSocket, 
         IHttpHelper httpHelper,
         IAccessTokenManager accessTokenManager,
         ILogger<SocketQQBot> logger,
-        IOptions<QQBotOptions> options)
+        IOptions<QQBotOptions> options,
+        IBotMessageManager botMessageManager)
     {
         _webSocket = webSocket;
         _httpHelper = httpHelper;
         _accessTokenManager = accessTokenManager;
         _logger = logger;
-        
+        _botMessageManager = botMessageManager;
         _options = options.Value;
         if (string.IsNullOrEmpty(_options.AppId) || string.IsNullOrEmpty(_options.AppSecret))
         {
             throw new InvalidOperationException("QQBot 的 AppId 或 AppSecret 未在配置中设置。");
         }
+
         _webSocket.OnMessageReceived += HandleMessageAsync;
         _webSocket.OnDisconnected += HandleDisconnectedAsync;
     }
@@ -46,18 +49,12 @@ public class SocketQQBot : IDisposable
     private async Task HandleDisconnectedAsync(string arg)
     {
         _logger.LogWarning("WebSocket 断开: {msg}", arg);
-
-        // 假设你的 WebSocketClient 内部在关闭时，能抛出带有状态码的异常或事件
-        // 这里演示业务逻辑的分支处理：
-
-        // 如果是因为 4014 (无权限) 或 4915 (封禁) 导致的断开，就不应该重连了
         if (arg.Contains("4914") || arg.Contains("4915") || arg.Contains("4013"))
         {
             _logger.LogError("机器人已下架或被封禁或 Intent 无效，停止重连。");
             return;
         }
 
-        // 如果是因为 4009 (连接过期)，需要重连并发 Resume (OpCode 6)
         if (arg.Contains("4009"))
         {
             _logger.LogInformation("连接过期，尝试重连并 Resume...");
@@ -65,7 +62,6 @@ public class SocketQQBot : IDisposable
             return;
         }
 
-        // 其他情况（如 4900 内部错误、网络波动），重连后重新 Identify (OpCode 2)
         _logger.LogInformation("尝试重连并重新登录...");
         await ConnectAsync();
         if (!string.IsNullOrEmpty(sessionId) && _lastS != null)
@@ -74,7 +70,7 @@ public class SocketQQBot : IDisposable
         }
         else
         {
-            await LoginAsync(); // 重新发送 Identify
+            await LoginAsync();
         }
         
         
@@ -120,6 +116,28 @@ public class SocketQQBot : IDisposable
             else if(payload.t == "GROUP_AT_MESSAGE_CREATE")
             {
                 GroupEventData data = JsonConvert.DeserializeObject<GroupEventData>(payload.d.ToString());
+                await _botMessageManager.SendGroupMessageAsync(
+                    data.group_openid!,
+                    messageId: data.id,
+                    sequence: 1,
+                    markdown: new BotMessageMarkdown() { content = "# 这是一条测试markdown消息\r\n这是markdown正文" },
+                    keyboard: new BotKeyBoard()
+                    {
+                        content = new BotKeyBoardContent()
+                        {
+                            rows = [ new BotKeyBoardRow() { buttons =
+                    [
+                        new BotKeyBoardButton()
+                        {
+                            id = Guid.NewGuid().ToString(),
+                            render_data = new BotKeyBoardRenderData(){ label = "按钮", style = 0, visited_label = "✔按钮" },
+                            action = new BotKeyBoardAction(){ type = 1, permission = new BotKeyBoardPermission(){ type = 2 }, data = "你点了按钮", modal = new BotKeyBoardModal(){
+                                content = "确认点按钮吗", confirm_text = "确认", cancel_text ="取消"
+                            }}
+                        }
+                    ] } ]
+                        }
+                    });
             }
             else if(payload.t == "GROUP_MESSAGE_CREATE")
             {

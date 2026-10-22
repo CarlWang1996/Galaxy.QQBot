@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAccessTokenManager, AccessTokenManager>();
         services.AddSingleton<SocketQQBot>();
         services.AddHostedService<QQBotHostedService>();
+        services.AddSingleton<IBotMessageManager, BotMessageManager>();
         return services;
     }
 }
