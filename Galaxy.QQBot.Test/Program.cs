@@ -21,12 +21,5 @@ public class Program
         await bot.ConnectAsync();
         await bot.LoginAsync();
         Console.Read();
-
-        //var builder = Host.CreateApplicationBuilder();
-        //builder.Services.AddSerilog();
-        //builder.Services.AddQQBot(option => option.UseAppCredentials("102077650", "5Oi2Ni4QnBZyNnDe5X0TxRwRxT0Y6fEo").UseShards(1));
-        //builder.Services.AddHostedService<HostService>();
-        //var app = builder.Build();
-        //await app.RunAsync();
     }
 }

@@ -4,7 +4,6 @@ using Galaxy.QQBot.Manager;
 using Galaxy.QQBot.Tool;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace Galaxy.QQBot.Bot;
 
@@ -29,36 +28,6 @@ public class SocketQQBot : IAsyncDisposable
     private readonly object _tokenLock = new();
     private Task? _tokenRefreshTask;
     private CancellationTokenSource? _tokenRefreshCts;
-
-    public SocketQQBot(
-        IOptions<QQBotOptions> options,
-        BotSessionContext context,
-        ILogger<SocketQQBot> logger,
-        IWebSocketClient webSocket,
-        IHttpHelper httpHelper,
-        IJsonHelper jsonHelper,
-        IAccessTokenManager accessTokenManager,
-        IBotMessageManager botMessageManager,
-        IHeartbeatManager heartbeatService)
-    {
-        _options = options.Value;
-        _context = context;
-        _logger = logger;
-        _webSocket = webSocket;
-        _httpHelper = httpHelper;
-        _jsonHelper = jsonHelper;
-        _accessTokenManager = accessTokenManager;
-        _botMessageManager = botMessageManager;
-        _heartbeatManager = heartbeatService;
-
-        if (string.IsNullOrEmpty(_options.AppId) || string.IsNullOrEmpty(_options.AppSecret))
-        {
-            throw new InvalidOperationException("QQBot 的 AppId 或 AppSecret 未在配置中设置。");
-        }
-
-        _webSocket.OnMessageReceived += HandleMessageAsync;
-        _webSocket.OnDisconnected += HandleDisconnectedAsync;
-    }
 
     public SocketQQBot(string appId, string appSecret, int shards, ILoggerFactory? factory = null)
     {

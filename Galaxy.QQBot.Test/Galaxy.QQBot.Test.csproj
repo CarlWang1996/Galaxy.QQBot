@@ -16,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Galaxy.QQBot.DependencyInjection\Galaxy.QQBot.DependencyInjection.csproj" />
     <ProjectReference Include="..\Galaxy.QQBot\Galaxy.QQBot.csproj" />
   </ItemGroup>
 
