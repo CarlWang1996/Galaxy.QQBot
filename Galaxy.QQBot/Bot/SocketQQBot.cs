@@ -16,7 +16,6 @@ public class SocketQQBot : IAsyncDisposable
     private readonly ILogger _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IHttpHelper _httpHelper;
-    private readonly IJsonHelper _jsonHelper;
     private readonly IAccessTokenManager _accessTokenManager;
     private readonly IBotMessageManager _botMessageManager;
     private readonly CancellationTokenSource _source = new();
@@ -33,9 +32,8 @@ public class SocketQQBot : IAsyncDisposable
         _loggerFactory = factory;
         _logger = factory.CreateLogger<SocketQQBot>();
         _httpHelper = new HttpHelper(new HttpClient());
-        _jsonHelper = new JsonHelper();
         _accessTokenManager = new AccessTokenManager(_httpHelper, factory.CreateLogger<AccessTokenManager>());
-        _botMessageManager = new BotMessageManager(_httpHelper, _accessTokenManager, _jsonHelper);
+        _botMessageManager = new BotMessageManager(_httpHelper, _accessTokenManager);
 
         if (string.IsNullOrEmpty(_options.AppId) || string.IsNullOrEmpty(_options.AppSecret))
         {
@@ -51,7 +49,7 @@ public class SocketQQBot : IAsyncDisposable
         // 1) 调 /gateway/bot 拿建议 shards + 连接配额
         string obj = await _httpHelper.GetAsync(
             $"{Constants.BaseUrl}gateway/bot", _accessTokenManager.AccessToken);
-        var gateway = _jsonHelper.DeserializeElement<GatewayBotResponse>(obj)!;
+        var gateway = JsonHelper.DeserializeElement<GatewayBotResponse>(obj)!;
 
         int total = Math.Max(1, gateway.shards);
 
@@ -68,7 +66,7 @@ public class SocketQQBot : IAsyncDisposable
         // 3) 串行建连（满足 max_concurrency；若需并行，按 limit.max_concurrency 限流）
         for (int i = 0; i < total; i++)
         {
-            var shard = new ShardConnection( i, total, _loggerFactory, _httpHelper, _jsonHelper, _accessTokenManager, _source.Token);
+            var shard = new ShardConnection( i, total, _loggerFactory, _httpHelper, _accessTokenManager, _source.Token);
 
             _shards.Add(shard);
 

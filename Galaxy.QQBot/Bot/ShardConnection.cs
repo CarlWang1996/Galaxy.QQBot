@@ -14,7 +14,6 @@ internal sealed class ShardConnection : IAsyncDisposable
     private readonly ILogger _logger;
     private readonly IWebSocketClient _webSocket;
     private readonly IHttpHelper _httpHelper;
-    private readonly IJsonHelper _jsonHelper;
     private readonly IAccessTokenManager _accessTokenManager;
     private readonly IHeartbeatManager _heartbeatManager;
     private readonly CancellationTokenSource _linkedSource;
@@ -29,7 +28,6 @@ internal sealed class ShardConnection : IAsyncDisposable
         int shardTotal,
         ILoggerFactory factory,
         IHttpHelper httpHelper,
-        IJsonHelper jsonHelper,
         IAccessTokenManager accessTokenManager,
         CancellationToken parentToken)
     {
@@ -39,9 +37,8 @@ internal sealed class ShardConnection : IAsyncDisposable
         _logger = factory.CreateLogger<ShardConnection>();
         _webSocket = new WebSocketClient();
         _httpHelper = httpHelper;
-        _jsonHelper = jsonHelper;
         _accessTokenManager = accessTokenManager;
-        _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory, _jsonHelper);
+        _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory);
         _linkedSource = CancellationTokenSource.CreateLinkedTokenSource(parentToken);
 
         _webSocket.OnMessageReceived += HandleMessageAsync;
@@ -62,7 +59,7 @@ internal sealed class ShardConnection : IAsyncDisposable
 
         string obj = await _httpHelper.GetAsync(
             $"{Constants.BaseUrl}gateway", _accessTokenManager.AccessToken);
-        var response = _jsonHelper.DeserializeElement<GatewayResponse>(obj)!;
+        var response = JsonHelper.DeserializeElement<GatewayResponse>(obj)!;
         await _webSocket.ConnectAsync(response.url);
         _logger.LogInformation("[shard {id}/{total}] 连接成功", _shardId, _shardTotal);
     }
@@ -80,7 +77,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                 properties = new { }
             }
         };
-        string json = _jsonHelper.Serialize(payload);
+        string json = JsonHelper.Serialize(payload);
         await _webSocket.SendAsync(json);
     }
 
@@ -96,7 +93,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                 seq = _context.LastS
             }
         };
-        string json = _jsonHelper.Serialize(pay);
+        string json = JsonHelper.Serialize(pay);
         await _webSocket.SendAsync(json);
     }
 
@@ -189,7 +186,7 @@ internal sealed class ShardConnection : IAsyncDisposable
         Payload? payload;
         try
         {
-            payload = _jsonHelper.DeserializeElement<Payload>(arg);
+            payload = JsonHelper.DeserializeElement<Payload>(arg);
         }
         catch (Exception ex)
         {
@@ -208,7 +205,7 @@ internal sealed class ShardConnection : IAsyncDisposable
             case OpCode.Hello:
                 try
                 {
-                    var d = _jsonHelper.DeserializeElement<HelloData>(payload.D)!;
+                    var d = JsonHelper.DeserializeElement<HelloData>(payload.D)!;
                     _context.HeartBeatInterval = d.heartbeat_interval;
                     _logger.LogDebug("[shard {id}] 收到 Hello，心跳间隔 {interval}ms", _shardId, d.heartbeat_interval);
                 }
@@ -271,7 +268,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                     EnsureHeartbeatLoopStarted();
                     try
                     {
-                        ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.D.ToString()!)!;
+                        ReadyEventData readyData = JsonHelper.DeserializeElement<ReadyEventData>(payload.D.ToString()!)!;
                         _logger.LogDebug("[shard {id}] 收到ready信息:{@data}", _shardId, readyData);
                         _context.SessionId = readyData.SessionId;
                     }
@@ -288,7 +285,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                 case "C2C_MESSAGE_CREATE":
                     try
                     {
-                        var data = _jsonHelper.DeserializeElement<C2cEventData>(payload.D.ToString()!)!;
+                        var data = JsonHelper.DeserializeElement<C2cEventData>(payload.D.ToString()!)!;
                         _logger.LogDebug("[shard {id}] 收到私聊消息:{@data}", _shardId, data);
                         // TODO: 处理单聊消息
                     }
@@ -301,7 +298,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                 case "GROUP_AT_MESSAGE_CREATE":
                     try
                     {
-                        var data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
+                        var data = JsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
                         _logger.LogDebug("[shard {id}] 收到群聊@消息:{@data}", _shardId, data);
                         // TODO: 处理群聊艾特
                     }
@@ -314,7 +311,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                 case "GROUP_MESSAGE_CREATE":
                     try
                     {
-                        var data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
+                        var data = JsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
                         _logger.LogDebug("[shard {id}] 收到群聊消息:{@data}", _shardId, data);
                         // TODO: 处理群聊消息
                     }
@@ -327,7 +324,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                 case "INTERACTION_CREATE":
                     try
                     {
-                        var data = _jsonHelper.DeserializeElement<InteractionEventData>(payload.D.ToString()!)!;
+                        var data = JsonHelper.DeserializeElement<InteractionEventData>(payload.D.ToString()!)!;
                         _logger.LogDebug("[shard {id}] 收到按钮交互消息:{@data}", _shardId, data);
                         // TODO: 处理交互事件
                     }
@@ -357,7 +354,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                 ["op"] = (int)OpCode.Heartbeat,
                 ["d"] = _context.LastS
             };
-            string json = _jsonHelper.Serialize(payload);
+            string json = JsonHelper.Serialize(payload);
             await _webSocket.SendAsync(json);
         }
         catch (Exception ex)

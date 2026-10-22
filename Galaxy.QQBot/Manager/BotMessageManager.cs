@@ -34,13 +34,11 @@ public class BotMessageManager : IBotMessageManager
 {
     private readonly IHttpHelper _httpHelper;
     private readonly IAccessTokenManager _accessTokenManager;
-    private readonly IJsonHelper _jsonHelper;
 
-    public BotMessageManager(IHttpHelper httpHelper, IAccessTokenManager accessTokenManager, IJsonHelper jsonHelper)
+    public BotMessageManager(IHttpHelper httpHelper, IAccessTokenManager accessTokenManager)
     {
         _httpHelper = httpHelper;
         _accessTokenManager = accessTokenManager;
-        _jsonHelper = jsonHelper;
     }
 
     public Task SendC2cMessageAsync(
@@ -138,7 +136,7 @@ public class BotMessageManager : IBotMessageManager
 
         string prepareJson = await _httpHelper.PostAsync(
             $"{baseUrl}/upload_prepare", _accessTokenManager.AccessToken, prepareReq);
-        var prepareResp = _jsonHelper.DeserializeElement<BotUploadPrepareResponse>(prepareJson)!;
+        var prepareResp = JsonHelper.DeserializeElement<BotUploadPrepareResponse>(prepareJson)!;
         var parts = prepareResp.Parts.OrderBy(s => s.Index).ToList();
         if (parts.Count == 0)
         {
@@ -212,7 +210,7 @@ public class BotMessageManager : IBotMessageManager
 
         string mergeJson = await _httpHelper.PostAsync(
             $"{baseUrl}/files", _accessTokenManager.AccessToken, mergeReq);
-        var mergeResp = _jsonHelper.DeserializeElement<BotUploadResponse>(mergeJson);
+        var mergeResp = JsonHelper.DeserializeElement<BotUploadResponse>(mergeJson);
         return mergeResp?.FileInfo!;
     }
 

@@ -2,17 +2,9 @@
 
 namespace Galaxy.QQBot.Tool;
 
-public interface IJsonHelper
+public static class JsonHelper
 {
-    string Serialize<T>(T obj);
-    T? Deserialize<T>(string json);
-    T? DeserializeElement<T>(object element);
-}
-
-public class JsonHelper : IJsonHelper
-{
-
-    public string Serialize<T>(T obj)
+    public static string Serialize<T>(T obj)
     {
         if (obj == null)
         {
@@ -21,7 +13,7 @@ public class JsonHelper : IJsonHelper
         return JsonSerializer.Serialize(obj);
     }
 
-    public T? Deserialize<T>(string json)
+    public static T? Deserialize<T>(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
@@ -37,7 +29,7 @@ public class JsonHelper : IJsonHelper
         }
     }
 
-    public T? DeserializeElement<T>(object element)
+    public static T? DeserializeElement<T>(object element)
     {
         if (element == null)
         {
