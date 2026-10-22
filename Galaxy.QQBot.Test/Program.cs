@@ -18,9 +18,7 @@ public class Program
         SocketQQBot bot = new SocketQQBot(appId, appSecret, loggerFactory);
         bot.GroupAtMessages.Subscribe(async s => 
         { 
-            await s.ReplyAsync(s.Content);
-            await s.ReplyAsync("这是第二条回复");
-            await s.MessageManager!.SendGroupMessageAsync(s.GroupOpenid, "这是一条主动消息");
+            await s.MessageManager.SendGroupMessageAsync(s.GroupOpenid, "这是一条主动消息");
         });
         await bot.StartAsync();
         Console.Read();
