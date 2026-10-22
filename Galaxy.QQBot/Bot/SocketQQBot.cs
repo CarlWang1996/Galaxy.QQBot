@@ -124,8 +124,9 @@ public class SocketQQBot : IDisposable
                 try
                 {
                     ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.D.ToString()!)!;
-                    _context.SessionId = readyData.session_id;
-                    _logger.LogInformation("Bot 登录成功 (READY)，SessionId: {sid}", readyData.session_id);
+                    _logger.LogDebug("收到ready信息:{@data}", readyData);
+                    _context.SessionId = readyData.SessionId;
+                    
                 }
                 catch (Exception ex)
                 {
@@ -134,7 +135,7 @@ public class SocketQQBot : IDisposable
             }
             else if (payload.T == "RESUMED")
             {
-                _logger.LogInformation("重连成功 (RESUMED)，恢复接收事件");
+                _logger.LogDebug("重连成功 (RESUMED)，恢复接收事件");
             }
             else if (payload.T == "C2C_MESSAGE_CREATE")
             {
