@@ -6,5 +6,5 @@ public class BotSessionContext
 
     public int HeartBeatInterval { get; set; }
 
-    public string? SessionId { get; set; } = string.Empty;
+    public string? SessionId { get; set; }
 }

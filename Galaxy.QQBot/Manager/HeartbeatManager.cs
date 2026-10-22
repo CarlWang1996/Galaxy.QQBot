@@ -11,10 +11,7 @@ public class HeartbeatManager
     private readonly BotSessionContext _context;
     private readonly ILogger _logger;
 
-    public HeartbeatManager(
-        WebSocketClient webSocket,
-        BotSessionContext context,
-        ILoggerFactory factory)
+    public HeartbeatManager(WebSocketClient webSocket, BotSessionContext context, ILoggerFactory factory)
     {
         _webSocket = webSocket;
         _context = context;
@@ -23,7 +20,7 @@ public class HeartbeatManager
 
     public async Task RunAsync(CancellationToken token)
     {
-        _logger.LogInformation("心跳任务已启动，间隔: {interval}ms", _context.HeartBeatInterval);
+        _logger.LogDebug("心跳任务已启动，间隔: {interval}ms", _context.HeartBeatInterval);
 
         while (!token.IsCancellationRequested)
         {
@@ -49,7 +46,7 @@ public class HeartbeatManager
             }
         }
 
-        _logger.LogInformation("心跳任务已停止");
+        _logger.LogDebug("心跳任务已停止");
     }
 }
 

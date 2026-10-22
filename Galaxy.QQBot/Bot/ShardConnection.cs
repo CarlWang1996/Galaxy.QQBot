@@ -8,6 +8,8 @@ namespace Galaxy.QQBot.Bot;
 
 internal sealed class ShardConnection : IAsyncDisposable
 {
+    private record GatewayResponse(string url);
+    private record HelloData(int heartbeat_interval);
     private readonly int _shardId;
     private readonly int _shardTotal;
     private readonly BotSessionContext _context;
@@ -17,32 +19,24 @@ internal sealed class ShardConnection : IAsyncDisposable
     private readonly AccessTokenManager _accessTokenManager;
     private readonly HeartbeatManager _heartbeatManager;
     private readonly CancellationTokenSource _linkedSource;
-
     private int _reconnecting = 0;
     private readonly object _heartbeatLock = new();
     private Task? _heartbeatTask;
     private CancellationTokenSource? _heartbeatCts;
 
-    public ShardConnection(
-        int shardId,
-        int shardTotal,
-        ILoggerFactory factory,
-        HttpHelper httpHelper,
-        AccessTokenManager accessTokenManager,
-        CancellationToken parentToken)
+    public ShardConnection(int shardId, int shardTotal, ILoggerFactory factory, HttpHelper httpHelper, AccessTokenManager accessTokenManager, CancellationToken parentToken)
     {
         _shardId = shardId;
         _shardTotal = shardTotal;
-        _context = new BotSessionContext();
         _logger = factory.CreateLogger<ShardConnection>();
-        _webSocket = new WebSocketClient();
         _httpHelper = httpHelper;
         _accessTokenManager = accessTokenManager;
-        _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory);
         _linkedSource = CancellationTokenSource.CreateLinkedTokenSource(parentToken);
-
+        _context = new BotSessionContext();
+        _webSocket = new WebSocketClient();
         _webSocket.OnMessageReceived += HandleMessageAsync;
         _webSocket.OnDisconnected += HandleDisconnectedAsync;
+        _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory);
     }
 
     public async Task StartAsync()
@@ -53,15 +47,16 @@ internal sealed class ShardConnection : IAsyncDisposable
 
     private async Task ConnectAsync()
     {
-        if (_webSocket.IsConnected) return;
+        if (_webSocket.IsConnected)
+        {
+            return;
+        }
 
         await _accessTokenManager.WaitForTokenAsync(_linkedSource.Token);
-
-        string obj = await _httpHelper.GetAsync(
-            $"{Constants.BaseUrl}gateway", _accessTokenManager.AccessToken);
+        string obj = await _httpHelper.GetAsync($"{Constants.BaseUrl}gateway", _accessTokenManager.AccessToken);
         var response = JsonHelper.DeserializeElement<GatewayResponse>(obj)!;
         await _webSocket.ConnectAsync(response.url);
-        _logger.LogInformation("[shard {id}/{total}] 连接成功", _shardId, _shardTotal);
+        _logger.LogDebug("[shard {id}/{total}] 连接成功", _shardId, _shardTotal);
     }
 
     private async Task IdentifyAsync()
@@ -77,6 +72,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                 properties = new { }
             }
         };
+
         string json = JsonHelper.Serialize(payload);
         await _webSocket.SendAsync(json);
     }
@@ -93,6 +89,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                 seq = _context.LastS
             }
         };
+
         string json = JsonHelper.Serialize(pay);
         await _webSocket.SendAsync(json);
     }
@@ -113,17 +110,17 @@ internal sealed class ShardConnection : IAsyncDisposable
             arg.Contains("4908") || arg.Contains("4909") || arg.Contains("4910") || arg.Contains("4911") ||
             arg.Contains("4912") || arg.Contains("4913"))
         {
-            _logger.LogInformation("[shard {id}] 错误码要求重新 Identify，清空 session。", _shardId);
+            _logger.LogDebug("[shard {id}] 错误码要求重新 Identify，清空 session。", _shardId);
             _context.SessionId = null;
             _context.LastS = null;
         }
         else if (arg.Contains("4009"))
         {
-            _logger.LogInformation("[shard {id}] 连接过期，尝试 Resume 重连...", _shardId);
+            _logger.LogDebug("[shard {id}] 连接过期，尝试 Resume 重连...", _shardId);
         }
         else
         {
-            _logger.LogInformation("[shard {id}] 尝试重连...", _shardId);
+            _logger.LogDebug("[shard {id}] 尝试重连...", _shardId);
         }
 
         await TryReconnectAsync();
@@ -140,8 +137,8 @@ internal sealed class ShardConnection : IAsyncDisposable
         try
         {
             StopHeartbeatLoop();
-
             var retry = 0;
+
             while (!_linkedSource.IsCancellationRequested)
             {
                 retry++;
@@ -151,16 +148,15 @@ internal sealed class ShardConnection : IAsyncDisposable
                 {
                     await Task.Delay(delay, _linkedSource.Token);
                     await ConnectAsync();
-
                     if (!string.IsNullOrEmpty(_context.SessionId) && _context.LastS != null)
                     {
                         await ResumeAsync();
-                        _logger.LogInformation("[shard {id}] 已发起 Resume（第 {retry} 次）", _shardId, retry);
+                        _logger.LogDebug("[shard {id}] 已发起 Resume（第 {retry} 次）", _shardId, retry);
                     }
                     else
                     {
                         await IdentifyAsync();
-                        _logger.LogInformation("[shard {id}] 已发起 Identify（第 {retry} 次）", _shardId, retry);
+                        _logger.LogDebug("[shard {id}] 已发起 Identify（第 {retry} 次）", _shardId, retry);
                     }
 
                     return;
@@ -184,6 +180,7 @@ internal sealed class ShardConnection : IAsyncDisposable
     private async Task HandleMessageAsync(string arg)
     {
         Payload? payload;
+
         try
         {
             payload = JsonHelper.DeserializeElement<Payload>(arg);
@@ -213,28 +210,47 @@ internal sealed class ShardConnection : IAsyncDisposable
                 {
                     _logger.LogError(ex, "[shard {id}] 解析 Hello 失败", _shardId);
                 }
+
                 break;
 
             case OpCode.Reconnect:
-                _logger.LogWarning("[shard {id}] 服务端要求重连 (op=7)", _shardId);
+                _logger.LogDebug("[shard {id}] 服务端要求重连 (op=7)", _shardId);
+
                 _ = Task.Run(async () =>
                 {
-                    try { await _webSocket.DisconnectAsync(); }
-                    catch (Exception ex) { _logger.LogWarning(ex, "[shard {id}] 主动断开失败", _shardId); }
+                    try 
+                    {
+                        await _webSocket.DisconnectAsync();
+                    }
+                    catch (Exception ex) 
+                    {
+                        _logger.LogWarning(ex, "[shard {id}] 主动断开失败", _shardId);
+                    }
+
                     await TryReconnectAsync();
                 });
+
                 break;
 
             case OpCode.Invalid_Session:
-                _logger.LogWarning("[shard {id}] Session 失效 (op=9)，清空会话并重新 Identify", _shardId);
+                _logger.LogDebug("[shard {id}] Session 失效 (op=9)，清空会话并重新 Identify", _shardId);
                 _context.SessionId = null;
                 _context.LastS = null;
+
                 _ = Task.Run(async () =>
                 {
-                    try { await _webSocket.DisconnectAsync(); }
-                    catch (Exception ex) { _logger.LogWarning(ex, "[shard {id}] 主动断开失败", _shardId); }
+                    try 
+                    { 
+                        await _webSocket.DisconnectAsync(); 
+                    }
+                    catch (Exception ex) 
+                    { 
+                        _logger.LogWarning(ex, "[shard {id}] 主动断开失败", _shardId); 
+                    }
+
                     await TryReconnectAsync();
                 });
+
                 break;
 
             case OpCode.Heartbeat:
@@ -243,7 +259,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                 break;
 
             case OpCode.HeartbeatACK:
-                _logger.LogTrace("[shard {id}] 收到心跳 ACK (op=11)", _shardId);
+                _logger.LogDebug("[shard {id}] 收到心跳 ACK (op=11)", _shardId);
                 break;
 
             case OpCode.Dispatch:
@@ -375,12 +391,20 @@ internal sealed class ShardConnection : IAsyncDisposable
 
             _heartbeatTask = Task.Run(async () =>
             {
-                try { await _heartbeatManager.RunAsync(token); }
-                catch (OperationCanceledException) { }
-                catch (Exception ex) { _logger.LogError(ex, "[shard {id}] 心跳循环异常退出", _shardId); }
+                try 
+                {
+                    await _heartbeatManager.RunAsync(token);
+                }
+                catch (OperationCanceledException) 
+                {
+                }
+                catch (Exception ex) 
+                {
+                    _logger.LogError(ex, "[shard {id}] 心跳循环异常退出", _shardId);
+                }
             }, token);
 
-            _logger.LogInformation("[shard {id}] 已启动心跳循环。", _shardId);
+            _logger.LogDebug("[shard {id}] 已启动心跳循环。", _shardId);
         }
     }
 
@@ -388,12 +412,23 @@ internal sealed class ShardConnection : IAsyncDisposable
     {
         lock (_heartbeatLock)
         {
-            if (_heartbeatCts == null) return;
-            try { _heartbeatCts.Cancel(); } catch { }
+            if (_heartbeatCts == null)
+            {
+                return;
+            }
+ 
+            try
+            {
+                _heartbeatCts.Cancel();
+            }
+            catch
+            {
+            }
+
             _heartbeatCts.Dispose();
             _heartbeatCts = null;
             _heartbeatTask = null;
-            _logger.LogInformation("[shard {id}] 已停止心跳循环。", _shardId);
+            _logger.LogDebug("[shard {id}] 已停止心跳循环。", _shardId);
         }
     }
 
@@ -402,11 +437,14 @@ internal sealed class ShardConnection : IAsyncDisposable
         _linkedSource.Cancel();
         StopHeartbeatLoop();
 
-        try { await _webSocket.DisposeAsync(); } catch { }
+        try
+        {
+            await _webSocket.DisposeAsync();
+        }
+        catch
+        {
+        }
 
         _linkedSource.Dispose();
     }
-
-    private record GatewayResponse(string url);
-    private record HelloData(int heartbeat_interval);
 }

@@ -122,7 +122,7 @@ public class AccessTokenManager
         }
 
         toComplete.TrySetResult(token);
-        _logger.LogInformation("获取accessToken成功");
+        _logger.LogDebug("获取accessToken成功");
     }
 
     private void NotifyCurrentWaiterFailed(Exception ex)

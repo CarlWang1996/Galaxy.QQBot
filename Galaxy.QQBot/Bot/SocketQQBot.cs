@@ -60,7 +60,7 @@ public class SocketQQBot : IAsyncDisposable
             try
             {
                 await shard.StartAsync();
-                _logger.LogInformation("shard {id}/{total} 已发起 Identify", i, total);
+                _logger.LogDebug("shard {id}/{total} 已发起 Identify", i, total);
             }
             catch (Exception ex)
             {
@@ -68,7 +68,7 @@ public class SocketQQBot : IAsyncDisposable
             }
         }
 
-        _logger.LogInformation("Bot 已启动，shards={shards}）", total);
+        _logger.LogDebug("Bot 已启动，shards={shards}）", total);
     }
 
     private void EnsureTokenRefreshLoopStarted()
@@ -90,7 +90,7 @@ public class SocketQQBot : IAsyncDisposable
                 catch (Exception ex) { _logger.LogError(ex, "Token 刷新循环异常退出"); }
             }, token);
 
-            _logger.LogInformation("已启动 Token 刷新循环。");
+            _logger.LogDebug("已启动 Token 刷新循环。");
         }
     }
 
@@ -112,7 +112,7 @@ public class SocketQQBot : IAsyncDisposable
             _tokenRefreshCts.Dispose();
             _tokenRefreshCts = null;
             _tokenRefreshTask = null;
-            _logger.LogInformation("已停止 Token 刷新循环。");
+            _logger.LogDebug("已停止 Token 刷新循环。");
         }
     }
 
