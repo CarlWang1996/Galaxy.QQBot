@@ -1,7 +1,12 @@
-﻿namespace Galaxy.QQBot.Models.Common;
+﻿using System.Text.Json.Serialization;
+
+namespace Galaxy.QQBot.Models.Common;
 
 public class BotMessageScene
 {
-    public string source { get; set; } = string.Empty;
-    public string[] ext { get; set; } = [];
+    [JsonPropertyName("source")]
+    public string Source { get; set; } = string.Empty;
+
+    [JsonPropertyName("ext")]
+    public string[] Ext { get; set; } = [];
 }
