@@ -8,5 +8,5 @@ public class BotMsgElement
     public string content { get; set; } = string.Empty;
     public BotMessageAttachment[] attachments { get; set; } = [];
     public BotARKData? ark_data { get; set; } = null;
-    public BotMsgElement[] msg_elements = [];
+    public BotMsgElement[] msg_elements { get; set; } = [];
 }

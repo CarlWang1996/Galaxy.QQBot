@@ -53,7 +53,6 @@ public class WebSocketClient : IWebSocketClient
         try
         {
             await _webSocket.ConnectAsync(new Uri(_url), token);
-            _ = Task.Run(() => HeartbeatLoopAsync(token), token);
         }
         catch (Exception ex)
         {
@@ -169,27 +168,6 @@ public class WebSocketClient : IWebSocketClient
         }
 
         await AttemptReconnectAsync(_cts?.Token ?? CancellationToken.None);
-    }
-
-    private async Task HeartbeatLoopAsync(CancellationToken token)
-    {
-        while (!token.IsCancellationRequested && IsConnected)
-        {
-            try
-            {
-                await Task.Delay(_heartbeatInterval, token);
-                if (IsConnected)
-                {
-                    await _webSocket!.SendAsync(
-                        new ArraySegment<byte>(Array.Empty<byte>()),
-                        WebSocketMessageType.Binary,
-                        true,
-                        token);
-                }
-            }
-            catch (OperationCanceledException) { break; }
-            catch { break; }
-        }
     }
 
     private async Task AttemptReconnectAsync(CancellationToken token)

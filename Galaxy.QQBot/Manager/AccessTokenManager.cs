@@ -80,7 +80,7 @@ public class AccessTokenManager : IAccessTokenManager
                     {
                         _accessToken = token;
                         _tokenReadyTcs.TrySetResult(_accessToken);
-                        _logger.LogInformation("获取accessToken成功:{0}", AccessToken);
+                        _logger.LogInformation("获取accessToken成功");
                     }
 
                     int delaySeconds = Math.Max(expiresIn - 30, 5);
