@@ -1,7 +1,12 @@
-﻿namespace Galaxy.QQBot.Models.Message;
+﻿using System.Text.Json.Serialization;
+
+namespace Galaxy.QQBot.Models.Message;
 
 public class BotMarkdown
 {
-    public string? content { get; set; } = null;
-    public bool? force_verify_image_resource { get; set; } = null;
+    [JsonPropertyName("content")]
+    public string? Content { get; set; } = null;
+
+    [JsonPropertyName("force_verify_image_resource")]
+    public bool? ForceVerifyImageResource { get; set; } = null;
 }

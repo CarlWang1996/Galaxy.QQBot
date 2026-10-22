@@ -85,27 +85,27 @@ public class BotMessageManager : IBotMessageManager
 
         var request = new SendBotMessageRequest
         {
-            msg_id = messageId,
-            event_id = !string.IsNullOrEmpty(eventId) ? $"INTERACTION_CREATE:{eventId}" : null,
-            msg_seq = sequence
+            MsgId = messageId,
+            EventId = !string.IsNullOrEmpty(eventId) ? $"INTERACTION_CREATE:{eventId}" : null,
+            MsgSeq = sequence
         };
 
         if (!string.IsNullOrEmpty(filePath))
         {
             string fileinfo = await UploadFileAsync(type, id, filePath, fileType: 4);
-            request.msg_type = 7;
-            request.media = new BotMediaInfo { file_info = fileinfo };
+            request.MsgType = 7;
+            request.Media = new BotMediaInfo { FileInfo = fileinfo };
         }
         else if (markdown != null)
         {
-            request.msg_type = 2;
-            request.markdown = markdown;
-            request.keyboard = keyboard;
+            request.MsgType = 2;
+            request.Markdown = markdown;
+            request.Keyboard = keyboard;
         }
         else if (!string.IsNullOrEmpty(content))
         {
-            request.msg_type = 0;
-            request.content = content;
+            request.MsgType = 0;
+            request.Content = content;
         }
         else
         {

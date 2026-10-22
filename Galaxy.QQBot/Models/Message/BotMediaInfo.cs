@@ -1,6 +1,9 @@
-﻿namespace Galaxy.QQBot.Models.Message;
+﻿using System.Text.Json.Serialization;
+
+namespace Galaxy.QQBot.Models.Message;
 
 public class BotMediaInfo
 {
-    public string? file_info { get; set; } = null;
+    [JsonPropertyName("file_info")]
+    public string? FileInfo { get; set; } = null;
 }

@@ -1,55 +1,95 @@
-﻿namespace Galaxy.QQBot.Models.Message;
+﻿using System.Text.Json.Serialization;
+
+namespace Galaxy.QQBot.Models.Message;
 
 public class BotKeyboard
 {
-    public BotKeyboardContent? content { get; set; } = null;
+    [JsonPropertyName("content")]
+    public BotKeyboardContent? Content { get; set; } = null;
 }
 
 public class BotKeyboardContent
 {
-    public BotKeyboardRow[]? rows { get; set; } = null;
+    [JsonPropertyName("rows")]
+    public BotKeyboardRow[]? Rows { get; set; } = null;
 }
 public class BotKeyboardRow
 {
-    public BotKeyboardButton[]? buttons { get; set; } = null;
+    [JsonPropertyName("buttons")]
+    public BotKeyboardButton[]? Buttons { get; set; } = null;
 }
 
 public class BotKeyboardButton
 {
-    public string? id { get; set; } = null;
-    public BotKeyboardRenderData? render_data { get; set; } = null;
-    public BotKeyboardAction? action { get; set; } = null;
-    public string? group_id { get; set; } = null;
+    [JsonPropertyName("id")]
+    public string? Id { get; set; } = null;
+
+    [JsonPropertyName("render_data")]
+    public BotKeyboardRenderData? RenderData { get; set; } = null;
+
+    [JsonPropertyName("action")]
+    public BotKeyboardAction? Action { get; set; } = null;
+
+    [JsonPropertyName("group_id")]
+    public string? GroupId { get; set; } = null;
 }
 
 public class BotKeyboardRenderData
 {
-    public string? label { get; set; } = null;
-    public string? visited_label { get; set; } = null;
-    public int? style { get; set; } = null;
+    [JsonPropertyName("label")]
+    public string? Label { get; set; } = null;
+
+    [JsonPropertyName("visited_label")]
+    public string? VisitedLabel { get; set; } = null;
+
+    [JsonPropertyName("style")]
+    public int? Style { get; set; } = null;
 }
 
 public class BotKeyboardAction
 {
-    public int? type { get; set; } = null;
-    public BotKeyboardPermission? permission { get; set; } = null;
-    public string? data { get; set; } = null;
-    public string? unsupport_tips { get; set; } = null;
-    public bool? enter { get; set; } = null;
-    public bool? reply { get; set; } = null;
-    public int? anchor { get; set; } = null;
-    public BotKeyboardModal? modal { get; set; } = null;
+    [JsonPropertyName("type")]
+    public int? Type { get; set; } = null;
+
+    [JsonPropertyName("permission")]
+    public BotKeyboardPermission? Permission { get; set; } = null;
+
+    [JsonPropertyName("data")]
+    public string? Data { get; set; } = null;
+
+    [JsonPropertyName("unsupport_tips")]
+    public string? UnsupportTips { get; set; } = null;
+
+    [JsonPropertyName("enter")]
+    public bool? Enter { get; set; } = null;
+
+    [JsonPropertyName("reply")]
+    public bool? Reply { get; set; } = null;
+
+    [JsonPropertyName("anchor")]
+    public int? Anchor { get; set; } = null;
+
+    [JsonPropertyName("modal")]
+    public BotKeyboardModal? Modal { get; set; } = null;
 }
 
 public class BotKeyboardPermission
 {
-    public int? type { get; set; } = null;
-    public string[]? specify_user_ids { get; set; } = null;
+    [JsonPropertyName("type")]
+    public int? Type { get; set; } = null;
+
+    [JsonPropertyName("specify_user_ids")]
+    public string[]? SpecifyUserIds { get; set; } = null;
 }
 
 public class BotKeyboardModal
 {
-    public string? content { get; set; } = null;
-    public string? confirm_text { get; set; } = null;
-    public string? cancel_text { get; set; } = null;
+    [JsonPropertyName("content")]
+    public string? Content { get; set; } = null;
+
+    [JsonPropertyName("confirm_text")]
+    public string? ConfirmText { get; set; } = null;
+
+    [JsonPropertyName("cancel_text")]
+    public string? CancelText { get; set; } = null;
 }

@@ -1,7 +1,12 @@
-﻿namespace Galaxy.QQBot.Models.Message;
+﻿using System.Text.Json.Serialization;
+
+namespace Galaxy.QQBot.Models.Message;
 
 public class BotInputNotify
 {
-    public int? input_type { get; set; } = null;
-    public int? input_second { get; set; } = null;
+    [JsonPropertyName("input_type")]
+    public int? InputType { get; set; } = null;
+
+    [JsonPropertyName("input_second")]
+    public int? InputSecond { get; set; } = null;
 }
