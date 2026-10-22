@@ -31,7 +31,7 @@ public class SocketQQBot : IAsyncDisposable
         _options = new QQBotOptions { AppId = appId, AppSecret = appSecret };
         _loggerFactory = factory;
         _logger = factory.CreateLogger<SocketQQBot>();
-        _httpHelper = new HttpHelper(new HttpClient());
+        _httpHelper = new HttpHelper();
         _accessTokenManager = new AccessTokenManager(_httpHelper, factory.CreateLogger<AccessTokenManager>());
         _botMessageManager = new BotMessageManager(_httpHelper, _accessTokenManager);
 
