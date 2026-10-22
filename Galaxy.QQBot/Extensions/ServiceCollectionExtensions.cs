@@ -22,6 +22,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWebSocketClient, WebSocketClient>();
         services.AddSingleton<IAccessTokenManager, AccessTokenManager>();
         services.AddSingleton<IBotMessageManager, BotMessageManager>();
+        services.AddSingleton<IHeartbeatManager,HeartbeatManager>();
+        services.AddSingleton<BotSessionContext>();
         services.AddSingleton<SocketQQBot>();
         services.AddHostedService<QQBotHostedService>();
         return services;
