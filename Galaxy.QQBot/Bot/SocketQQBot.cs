@@ -156,6 +156,7 @@ public class SocketQQBot : IDisposable
             else if (payload.T == "INTERACTION_CREATE")
             {
                 InteractionEventData data = _jsonHelper.DeserializeElement<InteractionEventData>(payload.D.ToString()!)!;
+                _logger.LogDebug("收到按钮交互消息:{@data}", data);
                 // TODO: 处理交互事件
             }
         }

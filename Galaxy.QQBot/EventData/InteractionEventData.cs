@@ -1,18 +1,40 @@
 ﻿using Galaxy.QQBot.Models.Event;
+using System.Text.Json.Serialization;
 
 namespace Galaxy.QQBot.EventData;
 
 public class InteractionEventData
 {
-    public string id { get; set; } = string.Empty;
-    public int type { get; set; } = 0;
-    public string scene { get; set; } = string.Empty;
-    public int chat_type { get; set; } = 0;
-    public string timestamp { get; set; } = string.Empty;
-    public string? user_openid { get; set; } = null;
-    public string? group_openid { get; set; } = null;
-    public string? group_member_openid { get; set; } = null;
-    public BotInteractionData data { get; set; } = null!;
-    public int version { get; set; } = 0;
-    public string application_id { get; set; } = string.Empty;
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("type")]
+    public int Type { get; set; } = 0;
+
+    [JsonPropertyName("scene")]
+    public string Scene { get; set; } = string.Empty;
+
+    [JsonPropertyName("chat_type")]
+    public int ChatType { get; set; } = 0;
+
+    [JsonPropertyName("timestamp")]
+    public string Timestamp { get; set; } = string.Empty;
+
+    [JsonPropertyName("user_openid")]
+    public string? UserOpenid { get; set; } = null;
+
+    [JsonPropertyName("group_openid")]
+    public string? GroupOpenid { get; set; } = null;
+
+    [JsonPropertyName("group_member_openid")]
+    public string? GroupMemberOpenid { get; set; } = null;
+
+    [JsonPropertyName("data")]
+    public BotInteractionData Data { get; set; } = null!;
+
+    [JsonPropertyName("version")]
+    public int Version { get; set; } = 0;
+
+    [JsonPropertyName("application_id")]
+    public string ApplicationId { get; set; } = string.Empty;
 }
