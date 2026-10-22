@@ -17,8 +17,9 @@ public class Program
         string appSecret = Environment.GetEnvironmentVariable("BotSecret", EnvironmentVariableTarget.Machine)!;
         SocketQQBot bot = new SocketQQBot(appId, appSecret, loggerFactory);
         bot.GroupAtMessages.Subscribe(async s => 
-        { 
-            await s.MessageManager.SendGroupMessageAsync(s.GroupOpenid, "这是一条主动消息");
+        {
+            await s.ReplyAsync("1");
+            await s.ReplyAsync("2");
         });
         await bot.StartAsync();
         Console.Read();

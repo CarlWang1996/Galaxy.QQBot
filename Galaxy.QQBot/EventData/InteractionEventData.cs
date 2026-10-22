@@ -52,12 +52,13 @@ public record class InteractionEventData
             throw new InvalidOperationException("MessageManager 尚未初始化，无法直接回复。请确保消息是由 SocketQQBot 接收的。");
         }
 
-        if(ChatType == 1)
+        int currentSeq = Interlocked.Increment(ref _seq);
+        if (ChatType == 1)
         {
             await MessageManager.SendGroupMessageAsync(
             groupId: GroupOpenid!,
             eventId: Id,
-            sequence: _seq,
+            sequence: currentSeq,
             content: content,
             markdown: markdown,
             keyboard: keyboard,
@@ -68,7 +69,7 @@ public record class InteractionEventData
             await MessageManager.SendC2cMessageAsync(
             userId: UserOpenid!,
             eventId: Id,
-            sequence: _seq,
+            sequence: currentSeq,
             content: content,
             markdown: markdown,
             keyboard: keyboard,
@@ -76,6 +77,5 @@ public record class InteractionEventData
             );
         }
         await MessageManager.ResponedAsync(Id);
-        _seq++;
     }
 }

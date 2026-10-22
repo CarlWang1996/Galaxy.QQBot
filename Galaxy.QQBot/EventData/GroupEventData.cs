@@ -53,15 +53,15 @@ public record class GroupEventData
             throw new InvalidOperationException("MessageManager 尚未初始化，无法直接回复。请确保消息是由 SocketQQBot 接收的。");
         }
 
+        int currentSeq = Interlocked.Increment(ref _seq);
         await MessageManager.SendGroupMessageAsync(
             groupId: GroupOpenid,
             messageId: Id,
-            sequence: _seq,
+            sequence: currentSeq,
             content: content,
             markdown: markdown,
             keyboard: keyboard,
             fileinfo: fileinfo
         );
-        _seq++;
     }
 }
