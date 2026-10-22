@@ -81,7 +81,7 @@ internal sealed class ShardConnection : IAsyncDisposable
         string obj = await _httpHelper.GetAsync($"{Constants.BaseUrl}gateway", _accessTokenManager.AccessToken);
         var response = JsonHelper.DeserializeElement<GatewayResponse>(obj)!;
         await _webSocket.ConnectAsync(response.url);
-        _logger.LogDebug("[shard {id}/{total}] 连接成功", _shardId, _shardTotal);
+        _logger.LogInformation("[shard {id}/{total}] 连接成功", _shardId, _shardTotal);
     }
 
     private async Task IdentifyAsync()
@@ -311,6 +311,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                     {
                         ReadyEventData readyData = JsonHelper.DeserializeElement<ReadyEventData>(payload.D.ToString()!)!;
                         _logger.LogDebug("[shard {id}] 收到ready信息:{@data}", _shardId, readyData);
+                        _logger.LogInformation("登录成功");
                         _context.SessionId = readyData.SessionId;
                         _onReady?.Invoke(readyData);
                     }

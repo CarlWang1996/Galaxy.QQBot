@@ -91,7 +91,7 @@ public class SocketQQBot : IAsyncDisposable
             }
         }
 
-        _logger.LogDebug("Bot 已启动，shards={shards}）", total);
+        _logger.LogInformation("Bot 已启动，shards={shards}）", total);
     }
 
     private void EnsureTokenRefreshLoopStarted()

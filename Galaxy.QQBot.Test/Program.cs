@@ -8,7 +8,7 @@ public class Program
 {
     static async Task Main(string[] args)
     {
-        Log.Logger = new LoggerConfiguration().MinimumLevel.Debug().WriteTo.Console().CreateLogger();
+        Log.Logger = new LoggerConfiguration().MinimumLevel.Information().WriteTo.Console().CreateLogger();
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddSerilog(dispose:true);
@@ -16,7 +16,12 @@ public class Program
         string appId = Environment.GetEnvironmentVariable("BotId", EnvironmentVariableTarget.Machine)!;
         string appSecret = Environment.GetEnvironmentVariable("BotSecret", EnvironmentVariableTarget.Machine)!;
         SocketQQBot bot = new SocketQQBot(appId, appSecret, loggerFactory);
-        bot.C2cMessages.Subscribe(async s => await s.ReplyAsync(s.Content));
+        bot.GroupAtMessages.Subscribe(async s => 
+        { 
+            await s.ReplyAsync(s.Content);
+            await s.ReplyAsync("这是第二条回复");
+            await s.MessageManager!.SendGroupMessageAsync(s.GroupOpenid, "这是一条主动消息");
+        });
         await bot.StartAsync();
         Console.Read();
     }

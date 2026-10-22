@@ -36,10 +36,9 @@ public class C2cEventData
     public BotMsgElement[] MsgElements { get; set; } = [];
 
     [JsonIgnore]
-    internal BotMessageManager? MessageManager { get; set; }
+    public BotMessageManager MessageManager { get; internal set; } = null!;
 
-    [JsonIgnore]
-    internal int? Seq { get; set; }
+    private int _seq = 0;
 
     public async Task ReplyAsync(string? content = null, BotMarkdown? markdown = null, BotKeyboard? keyboard = null,BotFileInfo? fileinfo = null)
     {
@@ -51,12 +50,12 @@ public class C2cEventData
         await MessageManager.SendC2cMessageAsync(
             userId: Author.Id,
             messageId: Id,
-            sequence: Seq,
+            sequence: _seq,
             content: content,
             markdown: markdown,
             keyboard:keyboard,
             fileinfo:fileinfo
         );
-        Seq++;
+        _seq++;
     }
 }
