@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 
 namespace Galaxy.QQBot.Bot;
 
-public class SocketQQBot : IDisposable
+public class SocketQQBot : IAsyncDisposable
 {
     internal record HelloData(int heartbeat_interval);
     internal record GatewayResponse(string url);
@@ -528,7 +528,7 @@ public class SocketQQBot : IDisposable
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         _source.Cancel();
 
@@ -537,7 +537,7 @@ public class SocketQQBot : IDisposable
 
         try
         {
-            _webSocket.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await _webSocket.DisposeAsync();
         }
         catch
         {

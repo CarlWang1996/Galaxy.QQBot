@@ -18,6 +18,9 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.Add("User-Agent", "Galaxy.QQBot/1.0");
             client.DefaultRequestHeaders.Add("Accept", "application/json");
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2)
         });
         services.AddSingleton<IJsonHelper, JsonHelper>();
         services.AddSingleton<IWebSocketClient, WebSocketClient>();
