@@ -145,6 +145,7 @@ public class SocketQQBot : IDisposable
             else if (payload.T == "GROUP_AT_MESSAGE_CREATE")
             {
                 GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
+                _logger.LogDebug("收到群聊消息:{@data}", data);
                 // TODO: 处理群聊艾特
             }
             else if (payload.T == "GROUP_MESSAGE_CREATE")
