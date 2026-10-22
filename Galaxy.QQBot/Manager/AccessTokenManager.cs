@@ -1,7 +1,7 @@
 ﻿using Galaxy.QQBot.Common;
 using Galaxy.QQBot.Tool;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 
 namespace Galaxy.QQBot.Manager;
 
@@ -55,30 +55,42 @@ public class AccessTokenManager : IAccessTokenManager
             try
             {
                 var result = await _httpHelper.PostAsyncWithOutToken($"{Constants.BaseUrl}app/getAppAccessToken", new { appId, clientSecret });
-                JObject response = JObject.Parse(result);
-                if (response.TryGetValue("code",out JToken? code))
+                using var doc = JsonDocument.Parse(result);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("code", out var codeElement))
                 {
-                    _logger.LogError($"获取AccessToken失败,错误码:{code!.Value<int>()}");
+                    int code = codeElement.GetInt32();
+                    _logger.LogError($"获取AccessToken失败,错误码:{code}");
+
+                    var ex = new Exception($"获取AccessToken失败,错误码:{code}");
                     if (!_tokenReadyTcs.Task.IsCompleted)
                     {
-                        _tokenReadyTcs.TrySetException(new Exception($"获取AccessToken失败,错误码:{code}"));
+                        _tokenReadyTcs.TrySetException(ex);
                     }
-
-                    throw new Exception($"获取AccessToken失败,错误码:{code}");
+                    throw ex;
                 }
 
-                if (response.TryGetValue("access_token", out JToken? token))
+                if (root.TryGetProperty("access_token", out var tokenElement) &&
+                    root.TryGetProperty("expires_in", out var expiresElement))
                 {
+                    string token = tokenElement.GetString()!;
+                    expiresIn = int.Parse(expiresElement.GetString()!);
+
                     lock (tokenLock)
                     {
-                        expiresIn = response["expires_in"]!.Value<int>();
-                        _accessToken = token.Value<string>()!;
+                        _accessToken = token;
                         _tokenReadyTcs.TrySetResult(_accessToken);
                         _logger.LogInformation("获取accessToken成功:{0}", AccessToken);
                     }
-                }
 
-                await Task.Delay((expiresIn - 30) * 1000, clt);
+                    int delaySeconds = Math.Max(expiresIn - 30, 5);
+                    await Task.Delay(delaySeconds * 1000, clt);
+                }
+                else
+                {
+                    _logger.LogWarning("解析 Token 响应失败，缺失字段: {result}", result);
+                    await Task.Delay(5000, clt);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -87,7 +99,15 @@ public class AccessTokenManager : IAccessTokenManager
             catch (Exception ex)
             {
                 _logger.LogError(ex, "刷新 Token 异常");
-                await Task.Delay(5000, clt);
+
+                try
+                {
+                    await Task.Delay(5000, clt);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
         } while (!clt.IsCancellationRequested);
     }

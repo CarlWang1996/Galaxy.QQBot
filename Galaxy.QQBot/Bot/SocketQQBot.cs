@@ -5,13 +5,12 @@ using Galaxy.QQBot.Tool;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace Galaxy.QQBot.Bot;
 
 public class SocketQQBot : IDisposable
 {
+    internal record HelloData(int heartbeat_interval);
     internal record GatewayResponse(string url);
     private readonly QQBotOptions _options;
     private readonly BotSessionContext _context;
@@ -111,7 +110,7 @@ public class SocketQQBot : IDisposable
 
         if (payload.op == (int)OpCode.Hello)
         {
-            dynamic d = payload.d;
+            var d = _jsonHelper.DeserializeElement<HelloData>(payload.d)!;
             _context.HeartBeatInterval = d.heartbeat_interval;
         }
         else if (payload.op == (int)OpCode.Dispatch)

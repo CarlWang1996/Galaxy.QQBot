@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json;
 
 namespace Galaxy.QQBot.Tool;
 
@@ -11,20 +11,14 @@ public interface IJsonHelper
 
 public class JsonHelper : IJsonHelper
 {
-    // 统一的序列化设置
-    private static readonly JsonSerializerSettings Settings = new()
-    {
-        DateParseHandling = DateParseHandling.None,
-        NullValueHandling = NullValueHandling.Ignore
-    };
 
     public string Serialize<T>(T obj)
     {
         if (obj == null)
         {
             return string.Empty;
-        }  
-        return JsonConvert.SerializeObject(obj, Settings);
+        }
+        return JsonSerializer.Serialize(obj);
     }
 
     public T? Deserialize<T>(string json)
@@ -35,7 +29,7 @@ public class JsonHelper : IJsonHelper
         }
         try
         {
-            return JsonConvert.DeserializeObject<T>(json, Settings);
+            return JsonSerializer.Deserialize<T>(json);
         }
         catch (Exception ex)
         {
@@ -45,15 +39,11 @@ public class JsonHelper : IJsonHelper
 
     public T? DeserializeElement<T>(object element)
     {
-        if (element == null) return default;
-
-        // 如果是 Newtonsoft 的 JToken，可以直接 ToObject
-        if (element is Newtonsoft.Json.Linq.JToken jToken)
+        if (element == null)
         {
-            return jToken.ToObject<T>();
+            return default;
         }
 
-        // 兜底转字符串再解析
         string json = element.ToString() ?? string.Empty;
         return Deserialize<T>(json);
     }

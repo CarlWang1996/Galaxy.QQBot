@@ -2,7 +2,6 @@
 using Galaxy.QQBot.Common;
 using Galaxy.QQBot.Tool;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 
 namespace Galaxy.QQBot.Manager;
 

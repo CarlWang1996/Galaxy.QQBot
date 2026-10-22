@@ -2,7 +2,6 @@
 using Galaxy.QQBot.Models.Message;
 using Galaxy.QQBot.Models.Upload;
 using Galaxy.QQBot.Tool;
-using Newtonsoft.Json;
 
 namespace Galaxy.QQBot.Manager;
 
