@@ -62,4 +62,31 @@ public class HttpHelper : IHttpHelper
         var response = await SendAsync(request, cancellationToken);
         return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    public async Task<string> PutAsync<T>(string url, string token, T data, CancellationToken cancellationToken = default)
+    {
+        HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Put, url);
+        request.Headers.Add("Authorization", $"QQBot {token}");
+        request.Content = JsonContent.Create(data);
+        var response = await SendAsync(request, cancellationToken);
+        return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> PutAsyncWithoutToken(string url, byte[] data, CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Put, url);
+
+        // 使用 ByteArrayContent 将 byte[] 包装成纯二进制内容
+        request.Content = new ByteArrayContent(data);
+
+        // 显式指定 Content-Type 为二进制流（有些云存储严格要求）
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+        var response = await _httpClient.SendAsync(request, cancellationToken);
+
+        // 确保检查一下 HTTP 状态码，如果不是 200 会抛异常或记录日志
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+    }
 }

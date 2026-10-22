@@ -62,3 +62,54 @@ public class C2cEventData
     public BotMsgElement[] msg_elements { get; set; } = [];
 
 }
+
+public class BotUploadPrepareRequest
+{
+    public int file_type { get; set; } = 0;
+    public string file_size { get; set; } = string.Empty;
+    public string file_name { get; set; } = string.Empty;
+    public string md5 { get; set; } = string.Empty;
+    public string sha1 { get; set; } = string.Empty;
+    public string md5_10m { get; set; } = string.Empty;
+}
+
+public class BotUploadPrepareResponse
+{
+    public string upload_id { get; set; } = string.Empty;
+    public string block_size { get; set; } = string.Empty;
+    public BotUploadPart[] parts { get; set; } = [];
+    public BotUploadConfig config { get; set; } = null!;
+}
+
+public class BotUploadPart
+{
+    public int index { get; set; } = 0;
+    public string presigned_url { get; set; } = string.Empty;
+    public string block_size { get; set; } = string.Empty;
+}
+
+public class BotUploadConfig
+{
+    public int concurrency { get; set; } = 0;
+    public int retry_timeout { get; set; } = 0;
+    public int retry_delay { get; set; } = 0;
+}
+
+public class BotUploadRequest
+{
+    public int? file_type { get; set; } = null;
+    public string? url { get; set; } = null;
+    public bool? srv_send_msg { get; set; } = null;
+    public string? upload_id { get; set; } = null;
+    public string? file_name { get; set; } = null;
+    public string? file_data { get; set; } = null;
+}
+
+public class BotUploadResponse
+{
+    public string file_uuid { get; set; } = string.Empty;
+    public string file_info { get; set; } = string.Empty;
+    public int ttl { get; set; } = 0;
+    public string id { get; set; } = string.Empty;
+    public string raw_url { get; set; } = string.Empty;
+}

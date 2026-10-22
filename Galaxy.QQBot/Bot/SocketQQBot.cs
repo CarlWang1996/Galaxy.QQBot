@@ -112,32 +112,11 @@ public class SocketQQBot : IDisposable
             else if (payload.t == "C2C_MESSAGE_CREATE")
             {
                 C2cEventData data = JsonConvert.DeserializeObject<C2cEventData>(payload.d.ToString());
+                await _botMessageManager.SendC2cMessageAsync(data.author.id,messageId:data.id,sequence:1, filePath:"F:\\工具\\Net安装版本\\dotNetFx40_Full_x86_x64.exe");
             }
             else if(payload.t == "GROUP_AT_MESSAGE_CREATE")
             {
                 GroupEventData data = JsonConvert.DeserializeObject<GroupEventData>(payload.d.ToString());
-                await _botMessageManager.SendGroupMessageAsync(
-                    data.group_openid!,
-                    messageId: data.id,
-                    sequence: 1,
-                    markdown: new BotMessageMarkdown() { content = "# 这是一条测试markdown消息\r\n这是markdown正文" },
-                    keyboard: new BotKeyBoard()
-                    {
-                        content = new BotKeyBoardContent()
-                        {
-                            rows = [ new BotKeyBoardRow() { buttons =
-                    [
-                        new BotKeyBoardButton()
-                        {
-                            id = Guid.NewGuid().ToString(),
-                            render_data = new BotKeyBoardRenderData(){ label = "按钮", style = 0, visited_label = "✔按钮" },
-                            action = new BotKeyBoardAction(){ type = 1, permission = new BotKeyBoardPermission(){ type = 2 }, data = "你点了按钮", modal = new BotKeyBoardModal(){
-                                content = "确认点按钮吗", confirm_text = "确认", cancel_text ="取消"
-                            }}
-                        }
-                    ] } ]
-                        }
-                    });
             }
             else if(payload.t == "GROUP_MESSAGE_CREATE")
             {
@@ -146,11 +125,6 @@ public class SocketQQBot : IDisposable
             else if(payload.t == "INTERACTION_CREATE")
             {
                 InteractionEventData data = JsonConvert.DeserializeObject<InteractionEventData>(payload.d.ToString());
-                await _botMessageManager.SendGroupMessageAsync(
-                    data.group_openid!,
-                    eventId: data.id,
-                    sequence: 1,
-                   content:"你点了按钮对不对?");
             }
         }
         
