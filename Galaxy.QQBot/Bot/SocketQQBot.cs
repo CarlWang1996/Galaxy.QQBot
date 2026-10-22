@@ -139,6 +139,7 @@ public class SocketQQBot : IDisposable
             else if (payload.T == "C2C_MESSAGE_CREATE")
             {
                 C2cEventData data = _jsonHelper.DeserializeElement<C2cEventData>(payload.D.ToString()!)!;
+                _logger.LogDebug("收到私聊消息:{@data}", data);
                 // TODO: 处理单聊消息
             }
             else if (payload.T == "GROUP_AT_MESSAGE_CREATE")

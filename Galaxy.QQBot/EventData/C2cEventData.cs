@@ -1,18 +1,36 @@
 ﻿using Galaxy.QQBot.Models.Common;
 using Galaxy.QQBot.Models.Event;
+using System.Text.Json.Serialization;
 
 namespace Galaxy.QQBot.EventData;
 
 public class C2cEventData
 {
-    public string id { get; set; } = string.Empty;
-    public BotUser author { get; set; } = null!;
-    public string content { get; set; } = string.Empty;
-    public string timestamp { get; set; } = string.Empty;
-    public int message_type { get; set; } = 0;
-    public BotMessageScene message_scene { get; set; } = null!;
-    public BotMessageAttachment[] attachments { get; set; } = [];
-    public BotARKData? ark_data { get; set; } = null;
-    public BotMsgElement[] msg_elements { get; set; } = [];
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("author")]
+    public BotUser Author { get; set; } = null!;
+
+    [JsonPropertyName("content")]
+    public string Content { get; set; } = string.Empty;
+
+    [JsonPropertyName("timestamp")]
+    public string Timestamp { get; set; } = string.Empty;
+
+    [JsonPropertyName("message_type")]
+    public int MessageType { get; set; } = 0;
+
+    [JsonPropertyName("message_scene")]
+    public BotMessageScene MessageScene { get; set; } = null!;
+
+    [JsonPropertyName("attachments")]
+    public BotMessageAttachment[] Attachments { get; set; } = [];
+
+    [JsonPropertyName("ark_data")]
+    public BotARKData? ArkData { get; set; } = null;
+
+    [JsonPropertyName("msg_elements")]
+    public BotMsgElement[] MsgElements { get; set; } = [];
 
 }
