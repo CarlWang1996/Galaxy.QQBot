@@ -112,11 +112,12 @@ public class SocketQQBot : IDisposable
             else if (payload.t == "C2C_MESSAGE_CREATE")
             {
                 C2cEventData data = JsonConvert.DeserializeObject<C2cEventData>(payload.d.ToString());
-                await _botMessageManager.SendC2cMessageAsync(data.author.id,messageId:data.id,sequence:1, filePath:"F:\\工具\\Net安装版本\\dotNetFx40_Full_x86_x64.exe");
+                
             }
             else if(payload.t == "GROUP_AT_MESSAGE_CREATE")
             {
                 GroupEventData data = JsonConvert.DeserializeObject<GroupEventData>(payload.d.ToString());
+                await _botMessageManager.SendGroupMessageAsync(data.group_openid, messageId: data.id, sequence: 1, filePath: "F:\\工具\\1串口工具\\XCOM V2.0.exe");
             }
             else if(payload.t == "GROUP_MESSAGE_CREATE")
             {
