@@ -143,6 +143,15 @@ public class SocketQQBot : IDisposable
             {
                 GroupEventData data = JsonConvert.DeserializeObject<GroupEventData>(payload.d.ToString());
             }
+            else if(payload.t == "INTERACTION_CREATE")
+            {
+                InteractionEventData data = JsonConvert.DeserializeObject<InteractionEventData>(payload.d.ToString());
+                await _botMessageManager.SendGroupMessageAsync(
+                    data.group_openid!,
+                    eventId: data.id,
+                    sequence: 1,
+                   content:"你点了按钮对不对?");
+            }
         }
         
     }
