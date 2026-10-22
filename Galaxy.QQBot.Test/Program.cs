@@ -1,7 +1,4 @@
 ﻿using Galaxy.QQBot.Bot;
-using Galaxy.QQBot.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 
@@ -18,7 +15,9 @@ public class Program
             builder.AddSerilog(Log.Logger,dispose:false);
             builder.SetMinimumLevel(LogLevel.Debug);
         });
-        SocketQQBot bot = new SocketQQBot("102077650", "5Oi2Ni4QnBZyNnDe5X0TxRwRxT0Y6fEo", 1, loggerFactory);
+        string appId = Environment.GetEnvironmentVariable("BotId", EnvironmentVariableTarget.Machine)!;
+        string appSecret = Environment.GetEnvironmentVariable("BotSecret", EnvironmentVariableTarget.Machine)!;
+        SocketQQBot bot = new SocketQQBot(appId, appSecret, 1, loggerFactory);
         await bot.ConnectAsync();
         await bot.LoginAsync();
         Console.Read();
