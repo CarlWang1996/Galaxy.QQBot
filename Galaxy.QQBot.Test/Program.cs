@@ -17,9 +17,8 @@ public class Program
         });
         string appId = Environment.GetEnvironmentVariable("BotId", EnvironmentVariableTarget.Machine)!;
         string appSecret = Environment.GetEnvironmentVariable("BotSecret", EnvironmentVariableTarget.Machine)!;
-        SocketQQBot bot = new SocketQQBot(appId, appSecret, 1, loggerFactory);
-        await bot.ConnectAsync();
-        await bot.LoginAsync();
+        SocketQQBot bot = new SocketQQBot(appId, appSecret, loggerFactory);
+        await bot.StartAsync();
         Console.Read();
     }
 }

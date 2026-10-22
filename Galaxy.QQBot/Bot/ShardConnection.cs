@@ -1,0 +1,415 @@
+﻿using Galaxy.QQBot.Common;
+using Galaxy.QQBot.EventData;
+using Galaxy.QQBot.Manager;
+using Galaxy.QQBot.Tool;
+using Microsoft.Extensions.Logging;
+
+namespace Galaxy.QQBot.Bot;
+
+internal sealed class ShardConnection : IAsyncDisposable
+{
+    private readonly int _shardId;
+    private readonly int _shardTotal;
+    private readonly BotSessionContext _context;
+    private readonly ILogger _logger;
+    private readonly IWebSocketClient _webSocket;
+    private readonly IHttpHelper _httpHelper;
+    private readonly IJsonHelper _jsonHelper;
+    private readonly IAccessTokenManager _accessTokenManager;
+    private readonly IHeartbeatManager _heartbeatManager;
+    private readonly CancellationTokenSource _linkedSource;
+
+    private int _reconnecting = 0;
+    private readonly object _heartbeatLock = new();
+    private Task? _heartbeatTask;
+    private CancellationTokenSource? _heartbeatCts;
+
+    public ShardConnection(
+        int shardId,
+        int shardTotal,
+        ILoggerFactory factory,
+        IHttpHelper httpHelper,
+        IJsonHelper jsonHelper,
+        IAccessTokenManager accessTokenManager,
+        CancellationToken parentToken)
+    {
+        _shardId = shardId;
+        _shardTotal = shardTotal;
+        _context = new BotSessionContext();
+        _logger = factory.CreateLogger<ShardConnection>();
+        _webSocket = new WebSocketClient();
+        _httpHelper = httpHelper;
+        _jsonHelper = jsonHelper;
+        _accessTokenManager = accessTokenManager;
+        _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory, _jsonHelper);
+        _linkedSource = CancellationTokenSource.CreateLinkedTokenSource(parentToken);
+
+        _webSocket.OnMessageReceived += HandleMessageAsync;
+        _webSocket.OnDisconnected += HandleDisconnectedAsync;
+    }
+
+    public async Task StartAsync()
+    {
+        await ConnectAsync();
+        await IdentifyAsync();
+    }
+
+    private async Task ConnectAsync()
+    {
+        if (_webSocket.IsConnected) return;
+
+        await _accessTokenManager.WaitForTokenAsync(_linkedSource.Token);
+
+        string obj = await _httpHelper.GetAsync(
+            $"{Constants.BaseUrl}gateway", _accessTokenManager.AccessToken);
+        var response = _jsonHelper.DeserializeElement<GatewayResponse>(obj)!;
+        await _webSocket.ConnectAsync(response.url);
+        _logger.LogInformation("[shard {id}/{total}] 连接成功", _shardId, _shardTotal);
+    }
+
+    private async Task IdentifyAsync()
+    {
+        Payload payload = new Payload
+        {
+            Op = (int)OpCode.Identify,
+            D = new
+            {
+                token = $"QQBot {_accessTokenManager.AccessToken}",
+                intents = Intents.GROUP_AND_C2C_EVENT | Intents.INTERACTION,
+                shard = new int[] { _shardId, _shardTotal },
+                properties = new { }
+            }
+        };
+        string json = _jsonHelper.Serialize(payload);
+        await _webSocket.SendAsync(json);
+    }
+
+    private async Task ResumeAsync()
+    {
+        Payload pay = new Payload
+        {
+            Op = (int)OpCode.Resume,
+            D = new
+            {
+                token = $"QQBot {_accessTokenManager.AccessToken}",
+                session_id = _context.SessionId,
+                seq = _context.LastS
+            }
+        };
+        string json = _jsonHelper.Serialize(pay);
+        await _webSocket.SendAsync(json);
+    }
+
+    private async Task HandleDisconnectedAsync(string arg)
+    {
+        _logger.LogWarning("[shard {id}/{total}] WebSocket 断开: {msg}", _shardId, _shardTotal, arg);
+
+        if (arg.Contains("4914") || arg.Contains("4915") || arg.Contains("4013") || arg.Contains("4014"))
+        {
+            _logger.LogError("[shard {id}] 机器人已下架/封禁/Intent 无效或无权限，停止重连。", _shardId);
+            return;
+        }
+
+        if (arg.Contains("4006") || arg.Contains("4007") ||
+            arg.Contains("4900") || arg.Contains("4901") || arg.Contains("4902") || arg.Contains("4903") ||
+            arg.Contains("4904") || arg.Contains("4905") || arg.Contains("4906") || arg.Contains("4907") ||
+            arg.Contains("4908") || arg.Contains("4909") || arg.Contains("4910") || arg.Contains("4911") ||
+            arg.Contains("4912") || arg.Contains("4913"))
+        {
+            _logger.LogInformation("[shard {id}] 错误码要求重新 Identify，清空 session。", _shardId);
+            _context.SessionId = null;
+            _context.LastS = null;
+        }
+        else if (arg.Contains("4009"))
+        {
+            _logger.LogInformation("[shard {id}] 连接过期，尝试 Resume 重连...", _shardId);
+        }
+        else
+        {
+            _logger.LogInformation("[shard {id}] 尝试重连...", _shardId);
+        }
+
+        await TryReconnectAsync();
+    }
+
+    private async Task TryReconnectAsync()
+    {
+        if (Interlocked.Exchange(ref _reconnecting, 1) == 1)
+        {
+            _logger.LogDebug("[shard {id}] 已有重连流程在运行，忽略。", _shardId);
+            return;
+        }
+
+        try
+        {
+            StopHeartbeatLoop();
+
+            var retry = 0;
+            while (!_linkedSource.IsCancellationRequested)
+            {
+                retry++;
+                var delay = TimeSpan.FromSeconds(Math.Min(30, Math.Pow(2, retry - 1)));
+
+                try
+                {
+                    await Task.Delay(delay, _linkedSource.Token);
+                    await ConnectAsync();
+
+                    if (!string.IsNullOrEmpty(_context.SessionId) && _context.LastS != null)
+                    {
+                        await ResumeAsync();
+                        _logger.LogInformation("[shard {id}] 已发起 Resume（第 {retry} 次）", _shardId, retry);
+                    }
+                    else
+                    {
+                        await IdentifyAsync();
+                        _logger.LogInformation("[shard {id}] 已发起 Identify（第 {retry} 次）", _shardId, retry);
+                    }
+
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[shard {id}] 第 {retry} 次重连失败，继续重试", _shardId, retry);
+                }
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _reconnecting, 0);
+        }
+    }
+
+    private async Task HandleMessageAsync(string arg)
+    {
+        Payload? payload;
+        try
+        {
+            payload = _jsonHelper.DeserializeElement<Payload>(arg);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[shard {id}] 解析 Payload 失败，原始消息: {raw}", _shardId, arg);
+            return;
+        }
+
+        if (payload == null)
+        {
+            _logger.LogWarning("[shard {id}] Payload 反序列化为 null，原始消息: {raw}", _shardId, arg);
+            return;
+        }
+
+        switch ((OpCode)payload.Op)
+        {
+            case OpCode.Hello:
+                try
+                {
+                    var d = _jsonHelper.DeserializeElement<HelloData>(payload.D)!;
+                    _context.HeartBeatInterval = d.heartbeat_interval;
+                    _logger.LogDebug("[shard {id}] 收到 Hello，心跳间隔 {interval}ms", _shardId, d.heartbeat_interval);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[shard {id}] 解析 Hello 失败", _shardId);
+                }
+                break;
+
+            case OpCode.Reconnect:
+                _logger.LogWarning("[shard {id}] 服务端要求重连 (op=7)", _shardId);
+                _ = Task.Run(async () =>
+                {
+                    try { await _webSocket.DisconnectAsync(); }
+                    catch (Exception ex) { _logger.LogWarning(ex, "[shard {id}] 主动断开失败", _shardId); }
+                    await TryReconnectAsync();
+                });
+                break;
+
+            case OpCode.Invalid_Session:
+                _logger.LogWarning("[shard {id}] Session 失效 (op=9)，清空会话并重新 Identify", _shardId);
+                _context.SessionId = null;
+                _context.LastS = null;
+                _ = Task.Run(async () =>
+                {
+                    try { await _webSocket.DisconnectAsync(); }
+                    catch (Exception ex) { _logger.LogWarning(ex, "[shard {id}] 主动断开失败", _shardId); }
+                    await TryReconnectAsync();
+                });
+                break;
+
+            case OpCode.Heartbeat:
+                _logger.LogDebug("[shard {id}] 收到服务端心跳请求 (op=1)，立即回应", _shardId);
+                _ = SendHeartbeatAsync();
+                break;
+
+            case OpCode.HeartbeatACK:
+                _logger.LogTrace("[shard {id}] 收到心跳 ACK (op=11)", _shardId);
+                break;
+
+            case OpCode.Dispatch:
+                await HandleDispatchAsync(payload);
+                break;
+
+            default:
+                _logger.LogDebug("[shard {id}] 未处理的 OpCode: {op}", _shardId, payload.Op);
+                break;
+        }
+    }
+
+    private async Task HandleDispatchAsync(Payload payload)
+    {
+        _context.LastS = payload.S;
+
+        try
+        {
+            switch (payload.T)
+            {
+                case "READY":
+                    EnsureHeartbeatLoopStarted();
+                    try
+                    {
+                        ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.D.ToString()!)!;
+                        _logger.LogDebug("[shard {id}] 收到ready信息:{@data}", _shardId, readyData);
+                        _context.SessionId = readyData.SessionId;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "[shard {id}] 解析 READY 事件失败", _shardId);
+                    }
+                    break;
+
+                case "RESUMED":
+                    _logger.LogDebug("[shard {id}] 重连成功 (RESUMED)，恢复接收事件", _shardId);
+                    break;
+
+                case "C2C_MESSAGE_CREATE":
+                    try
+                    {
+                        var data = _jsonHelper.DeserializeElement<C2cEventData>(payload.D.ToString()!)!;
+                        _logger.LogDebug("[shard {id}] 收到私聊消息:{@data}", _shardId, data);
+                        // TODO: 处理单聊消息
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "[shard {id}] 解析 C2C_MESSAGE_CREATE 失败", _shardId);
+                    }
+                    break;
+
+                case "GROUP_AT_MESSAGE_CREATE":
+                    try
+                    {
+                        var data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
+                        _logger.LogDebug("[shard {id}] 收到群聊@消息:{@data}", _shardId, data);
+                        // TODO: 处理群聊艾特
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "[shard {id}] 解析 GROUP_AT_MESSAGE_CREATE 失败", _shardId);
+                    }
+                    break;
+
+                case "GROUP_MESSAGE_CREATE":
+                    try
+                    {
+                        var data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
+                        _logger.LogDebug("[shard {id}] 收到群聊消息:{@data}", _shardId, data);
+                        // TODO: 处理群聊消息
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "[shard {id}] 解析 GROUP_MESSAGE_CREATE 失败", _shardId);
+                    }
+                    break;
+
+                case "INTERACTION_CREATE":
+                    try
+                    {
+                        var data = _jsonHelper.DeserializeElement<InteractionEventData>(payload.D.ToString()!)!;
+                        _logger.LogDebug("[shard {id}] 收到按钮交互消息:{@data}", _shardId, data);
+                        // TODO: 处理交互事件
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "[shard {id}] 解析 INTERACTION_CREATE 失败", _shardId);
+                    }
+                    break;
+
+                default:
+                    _logger.LogDebug("[shard {id}] 未处理的 Dispatch 事件: {type}", _shardId, payload.T);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[shard {id}] 处理 Dispatch 事件 {type} 失败", _shardId, payload.T);
+        }
+    }
+
+    private async Task SendHeartbeatAsync()
+    {
+        try
+        {
+            var payload = new Dictionary<string, object?>
+            {
+                ["op"] = (int)OpCode.Heartbeat,
+                ["d"] = _context.LastS
+            };
+            string json = _jsonHelper.Serialize(payload);
+            await _webSocket.SendAsync(json);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[shard {id}] 发送心跳失败", _shardId);
+        }
+    }
+
+    private void EnsureHeartbeatLoopStarted()
+    {
+        lock (_heartbeatLock)
+        {
+            if (_heartbeatTask != null && !_heartbeatTask.IsCompleted) return;
+
+            _heartbeatCts?.Dispose();
+            _heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(_linkedSource.Token);
+            var token = _heartbeatCts.Token;
+
+            _heartbeatTask = Task.Run(async () =>
+            {
+                try { await _heartbeatManager.RunAsync(token); }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { _logger.LogError(ex, "[shard {id}] 心跳循环异常退出", _shardId); }
+            }, token);
+
+            _logger.LogInformation("[shard {id}] 已启动心跳循环。", _shardId);
+        }
+    }
+
+    private void StopHeartbeatLoop()
+    {
+        lock (_heartbeatLock)
+        {
+            if (_heartbeatCts == null) return;
+            try { _heartbeatCts.Cancel(); } catch { }
+            _heartbeatCts.Dispose();
+            _heartbeatCts = null;
+            _heartbeatTask = null;
+            _logger.LogInformation("[shard {id}] 已停止心跳循环。", _shardId);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _linkedSource.Cancel();
+        StopHeartbeatLoop();
+
+        try { await _webSocket.DisposeAsync(); } catch { }
+
+        _linkedSource.Dispose();
+    }
+
+    private record GatewayResponse(string url);
+    private record HelloData(int heartbeat_interval);
+}

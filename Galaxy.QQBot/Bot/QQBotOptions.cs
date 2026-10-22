@@ -7,6 +7,4 @@ public class QQBotOptions
     public string AppId { get; set; } = string.Empty;
 
     public string AppSecret { get; set; } = string.Empty;
-
-    public int Shards { get; set; } = 1;
 }

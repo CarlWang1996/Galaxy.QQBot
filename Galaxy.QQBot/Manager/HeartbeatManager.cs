@@ -20,12 +20,12 @@ public class HeartbeatManager: IHeartbeatManager
     public HeartbeatManager(
         IWebSocketClient webSocket,
         BotSessionContext context,
-        ILogger<HeartbeatManager> logger,
+        ILoggerFactory factory,
         IJsonHelper jsonHelper)
     {
         _webSocket = webSocket;
         _context = context;
-        _logger = logger;
+        _logger = factory.CreateLogger<HeartbeatManager>();
         _jsonHelper = jsonHelper;
     }
 
