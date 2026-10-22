@@ -109,6 +109,7 @@ public class SocketQQBot : IAsyncDisposable
             catch 
             {
             }
+
             _tokenRefreshCts.Dispose();
             _tokenRefreshCts = null;
             _tokenRefreshTask = null;

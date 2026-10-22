@@ -109,8 +109,7 @@ public class BotMessageManager
             Md510m = await FileMd5Helper.GetPartialMd5Async(filePath)
         };
 
-        string prepareJson = await _httpHelper.PostAsync(
-            $"{baseUrl}/upload_prepare", _accessTokenManager.AccessToken, prepareReq);
+        string prepareJson = await _httpHelper.PostAsync($"{baseUrl}/upload_prepare", _accessTokenManager.AccessToken, prepareReq);
         var prepareResp = JsonHelper.DeserializeElement<BotUploadPrepareResponse>(prepareJson)!;
         var parts = prepareResp.Parts.OrderBy(s => s.Index).ToList();
         if (parts.Count == 0)
@@ -126,16 +125,11 @@ public class BotMessageManager
 
         if (declaredTotal != fileInfo.Length)
         {
-            throw new InvalidOperationException(
-                $"分块总大小({declaredTotal})与文件大小({fileInfo.Length})不一致，终止上传。");
+            throw new InvalidOperationException($"分块总大小({declaredTotal})与文件大小({fileInfo.Length})不一致，终止上传。");
         }
 
-        await using FileStream stream = new FileStream(
-            filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
-            bufferSize: 64 * 1024, useAsync: true);
-
+        await using FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024, useAsync: true);
         using var md5 = System.Security.Cryptography.MD5.Create();
-
         long uploadedTotal = 0;
 
         for (int i = 0; i < parts.Count; i++)
@@ -148,17 +142,13 @@ public class BotMessageManager
 
             if (n != expectedSize)
             {
-                throw new InvalidOperationException(
-                    $"分块 {block.Index} 读取不完整：期望 {expectedSize} 字节，实际 {n} 字节。");
+                throw new InvalidOperationException($"分块 {block.Index} 读取不完整：期望 {expectedSize} 字节，实际 {n} 字节。");
             }
 
             await _httpHelper.PutAsyncWithoutToken(block.PresignedUrl, blockBuffer);
             string blockMd5 = Convert.ToHexString(md5.ComputeHash(blockBuffer)).ToLowerInvariant();
 
-            await _httpHelper.PostAsync(
-                $"{baseUrl}/upload_part_finish",
-                _accessTokenManager.AccessToken,
-                new
+            await _httpHelper.PostAsync($"{baseUrl}/upload_part_finish",_accessTokenManager.AccessToken, new
                 {
                     upload_id = prepareResp.UploadId,
                     part_index = block.Index,
@@ -171,8 +161,7 @@ public class BotMessageManager
 
         if (uploadedTotal != fileInfo.Length)
         {
-            throw new InvalidOperationException(
-                $"上传总大小({uploadedTotal})与文件大小({fileInfo.Length})不一致，终止合并。");
+            throw new InvalidOperationException($"上传总大小({uploadedTotal})与文件大小({fileInfo.Length})不一致，终止合并。");
         }
 
         var mergeReq = new
@@ -183,23 +172,20 @@ public class BotMessageManager
             file_name = Path.GetFileName(filePath)
         };
 
-        string mergeJson = await _httpHelper.PostAsync(
-            $"{baseUrl}/files", _accessTokenManager.AccessToken, mergeReq);
+        string mergeJson = await _httpHelper.PostAsync($"{baseUrl}/files", _accessTokenManager.AccessToken, mergeReq);
         var mergeResp = JsonHelper.DeserializeElement<BotUploadResponse>(mergeJson);
         return mergeResp?.FileInfo!;
     }
 
-    private static async Task<int> ReadFullyAsync(
-        Stream stream, byte[] buffer, int offset, int count)
+    private static async Task<int> ReadFullyAsync(Stream stream, byte[] buffer, int offset, int count)
     {
         int totalRead = 0;
         while (totalRead < count)
         {
-            int read = await stream.ReadAsync(
-                buffer.AsMemory(offset + totalRead, count - totalRead));
+            int read = await stream.ReadAsync(buffer.AsMemory(offset + totalRead, count - totalRead));
             if (read == 0)
             {
-                break; // EOF
+                break;
             }
 
             totalRead += read;

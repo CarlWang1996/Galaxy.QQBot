@@ -10,6 +10,7 @@ public static class JsonHelper
         {
             return string.Empty;
         }
+
         return JsonSerializer.Serialize(obj);
     }
 
@@ -19,6 +20,7 @@ public static class JsonHelper
         {
             return default;
         }
+
         try
         {
             return JsonSerializer.Deserialize<T>(json);

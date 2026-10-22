@@ -70,11 +70,7 @@ public class WebSocketClient
         {
             if (_webSocket?.State == WebSocketState.Open)
             {
-                await _webSocket.SendAsync(
-                    new ArraySegment<byte>(data),
-                    messageType,
-                    endOfMessage: true,
-                    cancellationToken);
+                await _webSocket.SendAsync(new ArraySegment<byte>(data), messageType, endOfMessage: true, cancellationToken);
             }
         }
         finally
@@ -98,8 +94,7 @@ public class WebSocketClient
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await NotifyDisconnectedOnceAsync(
-                            $"连接关闭: Code: {(int)result.CloseStatus!}, Reason: {result.CloseStatusDescription}");
+                        await NotifyDisconnectedOnceAsync($"连接关闭: Code: {(int)result.CloseStatus!}, Reason: {result.CloseStatusDescription}");
                         return;
                     }
 
@@ -179,7 +174,14 @@ public class WebSocketClient
             return;
         }
 
-        try { await _receiveTask; } catch { }
+        try 
+        {
+            await _receiveTask;
+        }
+        catch 
+        {
+        }
+
         _receiveTask = null;
     }
 
@@ -191,8 +193,7 @@ public class WebSocketClient
         {
             try
             {
-                await _webSocket.CloseAsync(
-                    WebSocketCloseStatus.NormalClosure, "Client closed", CancellationToken.None);
+                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", CancellationToken.None);
             }
             catch
             {

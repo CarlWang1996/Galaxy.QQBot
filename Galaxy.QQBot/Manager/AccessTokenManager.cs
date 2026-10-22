@@ -53,10 +53,7 @@ public class AccessTokenManager
         {
             try
             {
-                var result = await _httpHelper.PostAsyncWithOutToken(
-                    $"{Constants.BaseUrl}app/getAppAccessToken",
-                    new { appId, clientSecret });
-
+                var result = await _httpHelper.PostAsyncWithOutToken($"{Constants.BaseUrl}app/getAppAccessToken", new { appId, clientSecret });
                 using var doc = JsonDocument.Parse(result);
                 var root = doc.RootElement;
 
@@ -64,22 +61,16 @@ public class AccessTokenManager
                 {
                     int code = codeElement.GetInt32();
                     _logger.LogError("获取AccessToken失败,错误码:{code}", code);
-
-                    NotifyCurrentWaiterFailed(
-                        new Exception($"获取AccessToken失败,错误码:{code}"));
-
+                    NotifyCurrentWaiterFailed(new Exception($"获取AccessToken失败,错误码:{code}"));
                     await SafeDelayAsync(TimeSpan.FromSeconds(5), clt);
                     continue;
                 }
 
-                if (root.TryGetProperty("access_token", out var tokenElement) &&
-                    root.TryGetProperty("expires_in", out var expiresElement))
+                if (root.TryGetProperty("access_token", out var tokenElement) && root.TryGetProperty("expires_in", out var expiresElement))
                 {
                     string token = tokenElement.GetString()!;
                     int expiresIn = int.Parse(expiresElement.GetString()!);
-
                     PublishToken(token);
-
                     int delaySeconds = Math.Max(expiresIn - 30, 5);
                     await SafeDelayAsync(TimeSpan.FromSeconds(delaySeconds), clt);
                 }
@@ -114,8 +105,7 @@ public class AccessTokenManager
             _accessToken = token;
             if (_tokenReadyTcs.Task.IsCompleted)
             {
-                _tokenReadyTcs = new TaskCompletionSource<string>(
-                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _tokenReadyTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             }
 
             toComplete = _tokenReadyTcs;
@@ -131,8 +121,7 @@ public class AccessTokenManager
         lock (_sync)
         {
             oldTcs = _tokenReadyTcs;
-            _tokenReadyTcs = new TaskCompletionSource<string>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+            _tokenReadyTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
         oldTcs.TrySetException(ex);
