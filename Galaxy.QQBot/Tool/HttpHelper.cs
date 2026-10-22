@@ -1,6 +1,16 @@
 ﻿using System.Net.Http.Json;
 
 namespace Galaxy.QQBot.Tool;
+
+public interface IHttpHelper
+{
+    Task<string> GetAsync(string url, string token, CancellationToken cancellationToken = default);
+    Task<string> PostAsync<T>(string url, string token, T data, CancellationToken cancellationToken = default);
+    Task<string> PostAsyncWithOutToken<T>(string url, T data, CancellationToken cancellationToken = default);
+    Task<string> PutAsync<T>(string url, string token, T data, CancellationToken cancellationToken = default);
+    Task<string> PutAsyncWithoutToken(string url, byte[] data, CancellationToken cancellationToken = default);
+}
+
 public class HttpHelper : IHttpHelper
 {
     private readonly HttpClient _httpClient;
@@ -28,7 +38,6 @@ public class HttpHelper : IHttpHelper
         }
         catch
         {
-            // 忽略读取响应体异常
         }
 
         throw new HttpRequestException(
@@ -55,7 +64,7 @@ public class HttpHelper : IHttpHelper
         return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<string> PostWithOutTokenAsync<T>(string url, T data, CancellationToken cancellationToken = default)
+    public async Task<string> PostAsyncWithOutToken<T>(string url, T data, CancellationToken cancellationToken = default)
     {
         HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Content = JsonContent.Create(data);
@@ -75,18 +84,10 @@ public class HttpHelper : IHttpHelper
     public async Task<string> PutAsyncWithoutToken(string url, byte[] data, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Put, url);
-
-        // 使用 ByteArrayContent 将 byte[] 包装成纯二进制内容
         request.Content = new ByteArrayContent(data);
-
-        // 显式指定 Content-Type 为二进制流（有些云存储严格要求）
         request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
-
         var response = await _httpClient.SendAsync(request, cancellationToken);
-
-        // 确保检查一下 HTTP 状态码，如果不是 200 会抛异常或记录日志
         response.EnsureSuccessStatusCode();
-
         return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,8 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Galaxy.QQBot.Common;
 
-namespace Galaxy.QQBot.Common.EventData;
+namespace Galaxy.QQBot.EventData;
 
 public class GroupEventData
 {

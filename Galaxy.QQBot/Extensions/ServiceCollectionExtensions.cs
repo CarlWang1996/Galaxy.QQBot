@@ -1,5 +1,5 @@
 ﻿using Galaxy.QQBot.Bot;
-using Galaxy.QQBot.Identity;
+using Galaxy.QQBot.Manager;
 using Galaxy.QQBot.Tool;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -8,8 +8,7 @@ namespace Galaxy.QQBot.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddQQBot(this IServiceCollection services,
-        Action<QQBotOptionsBuilder> configure)
+    public static IServiceCollection AddQQBot(this IServiceCollection services, Action<QQBotOptionsBuilder> configure)
     {
         var builder = new QQBotOptionsBuilder();
         configure(builder);
@@ -22,9 +21,9 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<IWebSocketClient, WebSocketClient>();
         services.AddSingleton<IAccessTokenManager, AccessTokenManager>();
+        services.AddSingleton<IBotMessageManager, BotMessageManager>();
         services.AddSingleton<SocketQQBot>();
         services.AddHostedService<QQBotHostedService>();
-        services.AddSingleton<IBotMessageManager, BotMessageManager>();
         return services;
     }
 }

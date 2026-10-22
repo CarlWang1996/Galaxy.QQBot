@@ -1,10 +1,6 @@
-﻿namespace Galaxy.QQBot.Common.EventData;
-public class BotInfo
-{
-    public string id { get; set; } = string.Empty;
-    public string username { get; set; } = string.Empty;
-    public bool bot { get; set; } = false;
-}
+﻿using Galaxy.QQBot.Common;
+
+namespace Galaxy.QQBot.EventData;
 
 public class ReadyEventData
 {

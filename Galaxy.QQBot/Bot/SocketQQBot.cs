@@ -1,6 +1,6 @@
 ﻿using Galaxy.QQBot.Common;
-using Galaxy.QQBot.Common.EventData;
-using Galaxy.QQBot.Identity;
+using Galaxy.QQBot.EventData;
+using Galaxy.QQBot.Manager;
 using Galaxy.QQBot.Tool;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -85,10 +85,11 @@ public class SocketQQBot : IDisposable
         }
         else if (payload.op == (int)OpCode.HeartbeatACK)
         {
-            _logger.LogInformation("收到心跳回复");
+            
         }
         else if(payload.op == (int)OpCode.Dispatch)
         {
+            _lastS = payload.s;
             if (payload.t == "READY")
             {
                 _ = StartHeartBeatAsync(_source.Token);
@@ -96,7 +97,6 @@ public class SocketQQBot : IDisposable
                 {
                     ReadyEventData readyData = JsonConvert.DeserializeObject<ReadyEventData>(payload.d.ToString());
                     sessionId = readyData.session_id;
-                    _lastS = payload.s;
                     _logger.LogInformation("Bot 登录成功 (READY)，SessionId: {sid}", readyData.session_id);
                 }
                 catch (Exception ex)
@@ -106,7 +106,6 @@ public class SocketQQBot : IDisposable
             }
             else if (payload.t == "RESUMED")
             {
-                _lastS = payload.s;
                 _logger.LogInformation("收到重连回复");
             }
             else if (payload.t == "C2C_MESSAGE_CREATE")

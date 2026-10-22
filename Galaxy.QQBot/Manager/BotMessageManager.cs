@@ -1,10 +1,10 @@
 ﻿using Galaxy.QQBot.Common;
-using Galaxy.QQBot.Common.EventData;
-using Galaxy.QQBot.Identity;
+using Galaxy.QQBot.EventData;
+using Galaxy.QQBot.Tool;
 using Newtonsoft.Json;
 using System.Text.RegularExpressions;
 
-namespace Galaxy.QQBot.Tool;
+namespace Galaxy.QQBot.Manager;
 
 public interface IBotMessageManager
 {
