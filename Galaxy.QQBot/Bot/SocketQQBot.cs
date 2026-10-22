@@ -158,59 +158,220 @@ public class SocketQQBot : IDisposable
 
     private async Task HandleMessageAsync(string arg)
     {
-        Payload payload = _jsonHelper.DeserializeElement<Payload>(arg)!;
-
-        if (payload.Op == (int)OpCode.Hello)
+        Payload? payload;
+        try
         {
-            var d = _jsonHelper.DeserializeElement<HelloData>(payload.D)!;
-            _context.HeartBeatInterval = d.heartbeat_interval;
+            payload = _jsonHelper.DeserializeElement<Payload>(arg);
         }
-        else if (payload.Op == (int)OpCode.Dispatch)
+        catch (Exception ex)
         {
-            _context.LastS = payload.S;
+            _logger.LogError(ex, "解析 Payload 失败，原始消息: {raw}", arg);
+            return;
+        }
 
-            if (payload.T == "READY")
-            {
-                EnsureHeartbeatLoopStarted();
+        if (payload == null)
+        {
+            _logger.LogWarning("Payload 反序列化为 null，原始消息: {raw}", arg);
+            return;
+        }
 
-                try
+        switch ((OpCode)payload.Op)
+        {
+            case OpCode.Hello:
                 {
-                    ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.D.ToString()!)!;
-                    _logger.LogDebug("收到ready信息:{@data}", readyData);
-                    _context.SessionId = readyData.SessionId;
+                    try
+                    {
+                        var d = _jsonHelper.DeserializeElement<HelloData>(payload.D)!;
+                        _context.HeartBeatInterval = d.heartbeat_interval;
+                        _logger.LogDebug("收到 Hello，心跳间隔 {interval}ms", d.heartbeat_interval);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "解析 Hello 失败");
+                    }
+                    break;
                 }
-                catch (Exception ex)
+
+            case OpCode.Reconnect:
                 {
-                    _logger.LogError(ex, "解析或推送 READY 事件失败");
+                    _logger.LogWarning("服务端要求重连 (op=7)");
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _webSocket.DisconnectAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "主动断开失败");
+                        }
+
+                        await TryReconnectAsync();
+                    });
+                    break;
                 }
-            }
-            else if (payload.T == "RESUMED")
+
+            case OpCode.Invalid_Session:
+                {
+                    _logger.LogWarning("Session 失效 (op=9)，清空会话并重新 Identify");
+                    _context.SessionId = null;
+                    _context.LastS = null;
+
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _webSocket.DisconnectAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "主动断开失败");
+                        }
+
+                        await TryReconnectAsync();
+                    });
+                    break;
+                }
+
+            case OpCode.Heartbeat:
+                {
+                    _logger.LogDebug("收到服务端心跳请求 (op=1)，立即回应");
+                    _ = SendHeartbeatAsync();
+                    break;
+                }
+
+            case OpCode.HeartbeatACK:
+                {
+                    _logger.LogTrace("收到心跳 ACK (op=11)");
+                    break;
+                }
+
+            case OpCode.Dispatch:
+                {
+                    await HandleDispatchAsync(payload);
+                    break;
+                }
+
+            default:
+                _logger.LogDebug("未处理的 OpCode: {op}", payload.Op);
+                break;
+        }
+    }
+
+    private async Task HandleDispatchAsync(Payload payload)
+    {
+        _context.LastS = payload.S;
+
+        try
+        {
+            switch (payload.T)
             {
-                _logger.LogDebug("重连成功 (RESUMED)，恢复接收事件");
+                case "READY":
+                    {
+                        EnsureHeartbeatLoopStarted();
+                        try
+                        {
+                            ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.D.ToString()!)!;
+                            _logger.LogDebug("收到ready信息:{@data}", readyData);
+                            _context.SessionId = readyData.SessionId;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "解析 READY 事件失败");
+                        }
+                        break;
+                    }
+
+                case "RESUMED":
+                    _logger.LogDebug("重连成功 (RESUMED)，恢复接收事件");
+                    break;
+
+                case "C2C_MESSAGE_CREATE":
+                    {
+                        try
+                        {
+                            var data = _jsonHelper.DeserializeElement<C2cEventData>(payload.D.ToString()!)!;
+                            _logger.LogDebug("收到私聊消息:{@data}", data);
+                            // TODO: 处理单聊消息
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "解析 C2C_MESSAGE_CREATE 失败");
+                        }
+                        break;
+                    }
+
+                case "GROUP_AT_MESSAGE_CREATE":
+                    {
+                        try
+                        {
+                            var data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
+                            _logger.LogDebug("收到群聊@消息:{@data}", data);
+                            // TODO: 处理群聊艾特
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "解析 GROUP_AT_MESSAGE_CREATE 失败");
+                        }
+                        break;
+                    }
+
+                case "GROUP_MESSAGE_CREATE":
+                    {
+                        try
+                        {
+                            var data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
+                            _logger.LogDebug("收到群聊消息:{@data}", data);
+                            // TODO: 处理群聊消息
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "解析 GROUP_MESSAGE_CREATE 失败");
+                        }
+                        break;
+                    }
+
+                case "INTERACTION_CREATE":
+                    {
+                        try
+                        {
+                            var data = _jsonHelper.DeserializeElement<InteractionEventData>(payload.D.ToString()!)!;
+                            _logger.LogDebug("收到按钮交互消息:{@data}", data);
+                            // TODO: 处理交互事件
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "解析 INTERACTION_CREATE 失败");
+                        }
+                        break;
+                    }
+
+                default:
+                    _logger.LogDebug("未处理的 Dispatch 事件: {type}", payload.T);
+                    break;
             }
-            else if (payload.T == "C2C_MESSAGE_CREATE")
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "处理 Dispatch 事件 {type} 失败", payload.T);
+        }
+    }
+
+    private async Task SendHeartbeatAsync()
+    {
+        try
+        {
+            Payload payload = new Payload
             {
-                C2cEventData data = _jsonHelper.DeserializeElement<C2cEventData>(payload.D.ToString()!)!;
-                _logger.LogDebug("收到私聊消息:{@data}", data);
-                // TODO: 处理单聊消息
-            }
-            else if (payload.T == "GROUP_AT_MESSAGE_CREATE")
-            {
-                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
-                _logger.LogDebug("收到群聊消息:{@data}", data);
-                // TODO: 处理群聊艾特
-            }
-            else if (payload.T == "GROUP_MESSAGE_CREATE")
-            {
-                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
-                // TODO: 处理群聊消息
-            }
-            else if (payload.T == "INTERACTION_CREATE")
-            {
-                InteractionEventData data = _jsonHelper.DeserializeElement<InteractionEventData>(payload.D.ToString()!)!;
-                _logger.LogDebug("收到按钮交互消息:{@data}", data);
-                // TODO: 处理交互事件
-            }
+                Op = (int)OpCode.Heartbeat,
+                D = _context.LastS!
+            };
+            string json = _jsonHelper.Serialize(payload);
+            await _webSocket.SendAsync(json);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "发送心跳失败");
         }
     }
 
