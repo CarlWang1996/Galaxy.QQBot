@@ -1,13 +1,30 @@
-﻿namespace Galaxy.QQBot.Models.Event;
+﻿using System.Text.Json.Serialization;
+
+namespace Galaxy.QQBot.Models.Event;
 
 public class BotMessageAttachment
 {
-    public string url { get; set; } = string.Empty;
-    public string filename { get; set; } = string.Empty;
-    public int width { get; set; } = 0;
-    public int height { get; set; } = 0;
-    public int size { get; set; } = 0;
-    public string content_type { get; set; } = string.Empty;
-    public string voice_wav_url { get; set; } = string.Empty;
-    public string asr_refer_text { get; set; } = string.Empty;
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = string.Empty;
+
+    [JsonPropertyName("filename")]
+    public string Filename { get; set; } = string.Empty;
+
+    [JsonPropertyName("width")]
+    public int Width { get; set; } = 0;
+
+    [JsonPropertyName("height")]
+    public int Height { get; set; } = 0;
+
+    [JsonPropertyName("size")]
+    public int Size { get; set; } = 0;
+
+    [JsonPropertyName("content_type")]
+    public string ContentType { get; set; } = string.Empty;
+
+    [JsonPropertyName("voice_wav_url")]
+    public string VoiceWavUrl { get; set; } = string.Empty;
+
+    [JsonPropertyName("asr_refer_text")]
+    public string AsrReferText { get; set; } = string.Empty;
 }

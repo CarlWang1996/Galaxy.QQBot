@@ -1,32 +1,58 @@
-﻿namespace Galaxy.QQBot.Models.Event;
+﻿using System.Text.Json.Serialization;
+
+namespace Galaxy.QQBot.Models.Event;
 
 public class BotInteractionData
 {
-    public int type { get; set; } = 0;
-    public BotInteractionResolved resolved { get; set; } = null!;
+    [JsonPropertyName("type")]
+    public int Type { get; set; } = 0;
+
+    [JsonPropertyName("resolved")]
+    public BotInteractionResolved Resolved { get; set; } = null!;
 }
 
 public class BotInteractionResolved
 {
-    public string button_data { get; set; } = string.Empty;
-    public string button_id { get; set; } = string.Empty;
-    public string feature_id { get; set; } = string.Empty;
-    public string message_id { get; set; } = string.Empty;
-    public string feedback_opt { get; set; } = string.Empty;
-    public int? @checked { get; set; } = null;
-    public string action { get; set; } = string.Empty;
-    public BotInteractionMessageScene? message_scene = null;
-    public BotInteractionAuthorizeData? authorize_data = null;
+    [JsonPropertyName("button_data")]
+    public string ButtonData { get; set; } = string.Empty;
+
+    [JsonPropertyName("button_id")]
+    public string ButtonId { get; set; } = string.Empty;
+
+    [JsonPropertyName("feature_id")]
+    public string FeatureId { get; set; } = string.Empty;
+
+    [JsonPropertyName("message_id")]
+    public string MessageId { get; set; } = string.Empty;
+
+    [JsonPropertyName("feedback_opt")]
+    public string FeedbackOpt { get; set; } = string.Empty;
+
+    [JsonPropertyName("checked")]
+    public int? Checked { get; set; } = null;
+
+    [JsonPropertyName("action")]
+    public string Action { get; set; } = string.Empty;
+
+    [JsonPropertyName("message_scene")]
+    public BotInteractionMessageScene? MessageScene = null;
+
+    [JsonPropertyName("authorize_data")]
+    public BotInteractionAuthorizeData? AuthorizeData = null;
 
 }
 
 public class BotInteractionMessageScene
 {
-    public string[] ext { get; set; } = [];
+    [JsonPropertyName("ext")]
+    public string[] Ext { get; set; } = [];
 }
 
 public class BotInteractionAuthorizeData
 {
-    public string opt_scene { get; set; } = string.Empty;
-    public string scope { get; set; } = string.Empty;
+    [JsonPropertyName("opt_scene")]
+    public string OptScene { get; set; } = string.Empty;
+
+    [JsonPropertyName("scope")]
+    public string Scope { get; set; } = string.Empty;
 }

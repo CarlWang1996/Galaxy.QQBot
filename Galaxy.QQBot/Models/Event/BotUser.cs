@@ -1,13 +1,30 @@
-﻿namespace Galaxy.QQBot.Models.Event;
+﻿using System.Text.Json.Serialization;
+
+namespace Galaxy.QQBot.Models.Event;
 
 public class BotUser
 {
-    public string id { get; set; } = string.Empty;
-    public string username { get; set; } = string.Empty;
-    public bool bot { get; set; } = false;
-    public string? union_openid { get; set; } = null;
-    public string? union_user_account { get; set; } = null;
-    public string? user_openid { get; set; } = null;
-    public string? member_openid { get; set; } = null;
-    public string member_role { get; set; } = string.Empty;
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("username")]
+    public string Username { get; set; } = string.Empty;
+
+    [JsonPropertyName("bot")]
+    public bool Bot { get; set; } = false;
+
+    [JsonPropertyName("union_openid")]
+    public string? UnionOpenid { get; set; } = null;
+
+    [JsonPropertyName("union_user_account")]
+    public string? UnionUserAccount { get; set; } = null;
+
+    [JsonPropertyName("user_openid")]
+    public string? UserOpenid { get; set; } = null;
+
+    [JsonPropertyName("member_openid")]
+    public string? MemberOpenid { get; set; } = null;
+
+    [JsonPropertyName("member_role")]
+    public string MemberRole { get; set; } = string.Empty;
 }
