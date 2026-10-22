@@ -12,34 +12,37 @@ namespace Galaxy.QQBot.Bot;
 
 public class SocketQQBot : IDisposable
 {
-    private readonly IAccessTokenManager _accessTokenManager;
+    private readonly QQBotOptions _options;
+    private readonly BotSessionContext _context;
+    private readonly ILogger _logger;
     private readonly IWebSocketClient _webSocket;
     private readonly IHttpHelper _httpHelper;
-    private readonly ILogger _logger;
-    private readonly QQBotOptions _options;
+    private readonly IJsonHelper _jsonHelper;
+    private readonly IAccessTokenManager _accessTokenManager;
     private readonly IBotMessageManager _botMessageManager;
-    private readonly BotSessionContext _context;
     private readonly IHeartbeatManager _heartbeatManager;
 
     private CancellationTokenSource _source = new CancellationTokenSource();
 
     public SocketQQBot(
+        IOptions<QQBotOptions> options,
+        BotSessionContext context,
+        ILogger<SocketQQBot> logger,
         IWebSocketClient webSocket,
         IHttpHelper httpHelper,
+        IJsonHelper jsonHelper,
         IAccessTokenManager accessTokenManager,
-        ILogger<SocketQQBot> logger,
-        IOptions<QQBotOptions> options,
         IBotMessageManager botMessageManager,
-        BotSessionContext context,
         IHeartbeatManager heartbeatService)
     {
-        _webSocket = webSocket;
-        _httpHelper = httpHelper;
-        _accessTokenManager = accessTokenManager;
-        _logger = logger;
-        _botMessageManager = botMessageManager;
         _options = options.Value;
         _context = context;
+        _logger = logger;
+        _webSocket = webSocket;
+        _httpHelper = httpHelper;
+        _jsonHelper = jsonHelper;
+        _accessTokenManager = accessTokenManager;
+        _botMessageManager = botMessageManager;
         _heartbeatManager = heartbeatService;
 
         if (string.IsNullOrEmpty(_options.AppId) || string.IsNullOrEmpty(_options.AppSecret))
@@ -53,12 +56,13 @@ public class SocketQQBot : IDisposable
 
     public SocketQQBot(string appId, string appSecret, int shards,ILoggerFactory? factory = null)
     {
+        factory = factory ?? new NullLoggerFactory();
         _options = new QQBotOptions() { AppId = appId, AppSecret = appSecret, Shards = shards };
         _context = new BotSessionContext();
-        factory = factory ?? new NullLoggerFactory();
+        _logger = factory.CreateLogger<SocketQQBot>();
         _webSocket = new WebSocketClient();
         _httpHelper = new HttpHelper(new HttpClient());
-        _logger = factory.CreateLogger<SocketQQBot>();
+        _jsonHelper = new JsonHelper();
         _accessTokenManager = new AccessTokenManager(_httpHelper,factory.CreateLogger<AccessTokenManager>());
         _botMessageManager = new BotMessageManager(_httpHelper, _accessTokenManager);
         _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory.CreateLogger<HeartbeatManager>());

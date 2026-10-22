@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
             client.DefaultRequestHeaders.Add("User-Agent", "Galaxy.QQBot/1.0");
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
+        services.AddSingleton<IJsonHelper, JsonHelper>();
         services.AddSingleton<IWebSocketClient, WebSocketClient>();
         services.AddSingleton<IAccessTokenManager, AccessTokenManager>();
         services.AddSingleton<IBotMessageManager, BotMessageManager>();
