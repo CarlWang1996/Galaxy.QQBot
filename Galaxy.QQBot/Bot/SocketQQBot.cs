@@ -21,8 +21,14 @@ public class SocketQQBot : IDisposable
     private readonly IAccessTokenManager _accessTokenManager;
     private readonly IBotMessageManager _botMessageManager;
     private readonly IHeartbeatManager _heartbeatManager;
-
-    private CancellationTokenSource _source = new CancellationTokenSource();
+    private readonly CancellationTokenSource _source = new();
+    private int _reconnecting = 0;
+    private readonly object _heartbeatLock = new();
+    private Task? _heartbeatTask;
+    private CancellationTokenSource? _heartbeatCts;
+    private readonly object _tokenLock = new();
+    private Task? _tokenRefreshTask;
+    private CancellationTokenSource? _tokenRefreshCts;
 
     public SocketQQBot(
         IOptions<QQBotOptions> options,
@@ -54,7 +60,7 @@ public class SocketQQBot : IDisposable
         _webSocket.OnDisconnected += HandleDisconnectedAsync;
     }
 
-    public SocketQQBot(string appId, string appSecret, int shards,ILoggerFactory? factory = null)
+    public SocketQQBot(string appId, string appSecret, int shards, ILoggerFactory? factory = null)
     {
         factory = factory ?? new NullLoggerFactory();
         _options = new QQBotOptions() { AppId = appId, AppSecret = appSecret, Shards = shards };
@@ -63,9 +69,10 @@ public class SocketQQBot : IDisposable
         _webSocket = new WebSocketClient();
         _httpHelper = new HttpHelper(new HttpClient());
         _jsonHelper = new JsonHelper();
-        _accessTokenManager = new AccessTokenManager(_httpHelper,factory.CreateLogger<AccessTokenManager>());
-        _botMessageManager = new BotMessageManager(_httpHelper, _accessTokenManager,_jsonHelper);
-        _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory.CreateLogger<HeartbeatManager>(),_jsonHelper);
+        _accessTokenManager = new AccessTokenManager(_httpHelper, factory.CreateLogger<AccessTokenManager>());
+        _botMessageManager = new BotMessageManager(_httpHelper, _accessTokenManager, _jsonHelper);
+        _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory.CreateLogger<HeartbeatManager>(), _jsonHelper);
+
         if (string.IsNullOrEmpty(_options.AppId) || string.IsNullOrEmpty(_options.AppSecret))
         {
             throw new InvalidOperationException("QQBot 的 AppId 或 AppSecret 未在配置中设置。");
@@ -80,27 +87,72 @@ public class SocketQQBot : IDisposable
         _logger.LogWarning("WebSocket 断开: {msg}", arg);
         if (arg.Contains("4914") || arg.Contains("4915") || arg.Contains("4013"))
         {
-            _logger.LogError("机器人已下架或被封禁或 Intent 无效，停止重连。");
+            _logger.LogError("机器人已下架/封禁或 Intent 无效，停止重连。");
             return;
         }
 
         if (arg.Contains("4009"))
         {
-            _logger.LogInformation("连接过期，尝试重连并 Resume...");
-            await ReconnectAsync();
-            return;
-        }
-
-        _logger.LogInformation("尝试重连并重新登录...");
-        await ConnectAsync();
-
-        if (!string.IsNullOrEmpty(_context.SessionId) && _context.LastS != null)
-        {
-            await ReconnectAsync();
+            _logger.LogInformation("连接过期，尝试 Resume 重连...");
         }
         else
         {
-            await LoginAsync();
+            _logger.LogInformation("尝试重连...");
+        }
+
+        await TryReconnectAsync();
+    }
+
+    private async Task TryReconnectAsync()
+    {
+        if (Interlocked.Exchange(ref _reconnecting, 1) == 1)
+        {
+            _logger.LogDebug("已有重连流程在运行，忽略本次触发。");
+            return;
+        }
+
+        try
+        {
+            StopHeartbeatLoop();
+
+            var retry = 0;
+            while (!_source.IsCancellationRequested)
+            {
+                retry++;
+                var delay = TimeSpan.FromSeconds(Math.Min(30, Math.Pow(2, retry - 1)));
+
+                try
+                {
+                    await Task.Delay(delay, _source.Token);
+
+                    await ConnectAsync();
+
+                    if (!string.IsNullOrEmpty(_context.SessionId) && _context.LastS != null)
+                    {
+                        await ReconnectAsync();
+                        _logger.LogInformation("已发起 Resume（第 {retry} 次尝试）", retry);
+                    }
+                    else
+                    {
+                        await LoginAsync();
+                        _logger.LogInformation("已发起 Identify（第 {retry} 次尝试）", retry);
+                    }
+
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "第 {retry} 次重连失败，继续重试", retry);
+                }
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _reconnecting, 0);
         }
     }
 
@@ -119,14 +171,13 @@ public class SocketQQBot : IDisposable
 
             if (payload.T == "READY")
             {
-                _ = _heartbeatManager.RunAsync(_source.Token);
+                EnsureHeartbeatLoopStarted();
 
                 try
                 {
                     ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.D.ToString()!)!;
                     _logger.LogDebug("收到ready信息:{@data}", readyData);
                     _context.SessionId = readyData.SessionId;
-                    
                 }
                 catch (Exception ex)
                 {
@@ -165,8 +216,15 @@ public class SocketQQBot : IDisposable
 
     public async Task ConnectAsync()
     {
-        _ = _accessTokenManager.StartGetAccessToken(_options.AppId, _options.AppSecret, _source.Token);
+        if (_webSocket.IsConnected)
+        {
+            return;
+        }
+
+        EnsureTokenRefreshLoopStarted();
+
         await _accessTokenManager.WaitForTokenAsync(_source.Token);
+
         string obj = await _httpHelper.GetAsync($"{Constants.BaseUrl}gateway", _accessTokenManager.AccessToken);
         GatewayResponse response = _jsonHelper.DeserializeElement<GatewayResponse>(obj)!;
         await _webSocket.ConnectAsync(response.url);
@@ -190,11 +248,6 @@ public class SocketQQBot : IDisposable
         await _webSocket.SendAsync(json);
     }
 
-    public void Dispose()
-    {
-        _source.Cancel();
-    }
-
     private async Task ReconnectAsync()
     {
         Payload pay = new Payload()
@@ -209,5 +262,126 @@ public class SocketQQBot : IDisposable
         };
         string json = _jsonHelper.Serialize(pay);
         await _webSocket.SendAsync(json);
+    }
+
+    private void EnsureHeartbeatLoopStarted()
+    {
+        lock (_heartbeatLock)
+        {
+            if (_heartbeatTask != null && !_heartbeatTask.IsCompleted)
+            {
+                _logger.LogDebug("心跳循环已在运行，跳过启动。");
+                return;
+            }
+
+            _heartbeatCts?.Dispose();
+            _heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(_source.Token);
+
+            var token = _heartbeatCts.Token;
+            _heartbeatTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await _heartbeatManager.RunAsync(token);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "心跳循环异常退出");
+                }
+            }, token);
+
+            _logger.LogInformation("已启动心跳循环。");
+        }
+    }
+
+    private void StopHeartbeatLoop()
+    {
+        lock (_heartbeatLock)
+        {
+            if (_heartbeatCts == null)
+            {
+                return;
+            }
+
+            try { _heartbeatCts.Cancel(); } catch { }
+            _heartbeatCts.Dispose();
+            _heartbeatCts = null;
+            _heartbeatTask = null;
+            _logger.LogInformation("已停止心跳循环。");
+        }
+    }
+
+    private void EnsureTokenRefreshLoopStarted()
+    {
+        lock (_tokenLock)
+        {
+            if (_tokenRefreshTask != null && !_tokenRefreshTask.IsCompleted)
+            {
+                _logger.LogDebug("Token 刷新循环已在运行，复用现有任务。");
+                return;
+            }
+
+            _tokenRefreshCts?.Dispose();
+            _tokenRefreshCts = CancellationTokenSource.CreateLinkedTokenSource(_source.Token);
+
+            var token = _tokenRefreshCts.Token;
+            var appId = _options.AppId;
+            var appSecret = _options.AppSecret;
+
+            _tokenRefreshTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await _accessTokenManager.StartGetAccessToken(appId, appSecret, token);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Token 刷新循环异常退出");
+                }
+            }, token);
+
+            _logger.LogInformation("已启动 Token 刷新循环。");
+        }
+    }
+
+    private void StopTokenRefreshLoop()
+    {
+        lock (_tokenLock)
+        {
+            if (_tokenRefreshCts == null)
+            {
+                return;
+            }
+
+            try { _tokenRefreshCts.Cancel(); } catch { }
+            _tokenRefreshCts.Dispose();
+            _tokenRefreshCts = null;
+            _tokenRefreshTask = null;
+            _logger.LogInformation("已停止 Token 刷新循环。");
+        }
+    }
+
+    public void Dispose()
+    {
+        _source.Cancel();
+
+        StopHeartbeatLoop();
+        StopTokenRefreshLoop();
+
+        try
+        {
+            _webSocket.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+        }
+
+        _source.Dispose();
     }
 }

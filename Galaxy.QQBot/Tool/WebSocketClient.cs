@@ -20,6 +20,10 @@ public interface IWebSocketClient : IAsyncDisposable
     Task DisconnectAsync();
 }
 
+/// <summary>
+/// 纯 WebSocket 客户端：只负责“连接 + 收发”，不做任何重连决策。
+/// 重连策略统一由上层（SocketQQBot）控制。
+/// </summary>
 public class WebSocketClient : IWebSocketClient
 {
     private ClientWebSocket? _webSocket;
@@ -28,7 +32,7 @@ public class WebSocketClient : IWebSocketClient
     private Task? _receiveTask;
     private string _url = string.Empty;
     private readonly int _bufferSize = 1024 * 4;
-    private readonly TimeSpan _heartbeatInterval = TimeSpan.FromSeconds(30);
+    private int _disconnectNotified = 0;
     public bool IsConnected => _webSocket?.State == WebSocketState.Open;
     public event Func<string, Task>? OnMessageReceived;
     public event Func<string, Task>? OnDisconnected;
@@ -41,8 +45,11 @@ public class WebSocketClient : IWebSocketClient
         }
 
         _url = url;
+        _cts?.Dispose();
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Interlocked.Exchange(ref _disconnectNotified, 0);
         await ConnectInternalAsync(_cts.Token);
+
         _receiveTask = Task.Run(() => ReceiveLoopAsync(_cts.Token), _cts.Token);
     }
 
@@ -50,15 +57,7 @@ public class WebSocketClient : IWebSocketClient
     {
         _webSocket?.Dispose();
         _webSocket = new ClientWebSocket();
-        try
-        {
-            await _webSocket.ConnectAsync(new Uri(_url), token);
-        }
-        catch (Exception ex)
-        {
-            await TriggerDisconnectedAsync($"连接失败: {ex.Message}");
-            throw;
-        }
+        await _webSocket.ConnectAsync(new Uri(_url), token);
     }
 
     public async Task SendAsync(string message, CancellationToken cancellationToken = default)
@@ -105,9 +104,9 @@ public class WebSocketClient : IWebSocketClient
     private async Task ReceiveLoopAsync(CancellationToken token)
     {
         var buffer = new byte[_bufferSize];
-        while (!token.IsCancellationRequested && _webSocket?.State == WebSocketState.Open)
+        try
         {
-            try
+            while (!token.IsCancellationRequested && _webSocket?.State == WebSocketState.Open)
             {
                 using var ms = new MemoryStream();
                 WebSocketReceiveResult result;
@@ -117,12 +116,14 @@ public class WebSocketClient : IWebSocketClient
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await HandleCloseAsync(result.CloseStatusDescription ?? "服务器主动关闭");
+                        await NotifyDisconnectedOnceAsync(
+                            $"连接关闭: Code: {(int)result.CloseStatus!}, Reason: {result.CloseStatusDescription}");
                         return;
                     }
 
                     ms.Write(buffer, 0, result.Count);
-                }while (!result.EndOfMessage);
+                }
+                while (!result.EndOfMessage);
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
@@ -132,69 +133,25 @@ public class WebSocketClient : IWebSocketClient
                         await OnMessageReceived.Invoke(message);
                     }
                 }
-                else if (result.MessageType == WebSocketMessageType.Close)
-                {
-                    var closeCode = (int)result.CloseStatus!;
-                    var description = result.CloseStatusDescription;
-                    await HandleCloseAsync($"Code: {closeCode}, Reason: {description}");
-                    return;
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                await TriggerDisconnectedAsync($"接收异常: {ex.Message}");
-                await AttemptReconnectAsync(token);
-                break;
             }
         }
-    }
-
-    private async Task HandleCloseAsync(string reason)
-    {
-        await TriggerDisconnectedAsync($"连接关闭: {reason}");
-        if (_webSocket?.State == WebSocketState.CloseReceived)
+        catch (OperationCanceledException)
         {
-            try
-            {
-                await _webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
-            }
-            catch 
-            {
-            }
+            
         }
-
-        await AttemptReconnectAsync(_cts?.Token ?? CancellationToken.None);
-    }
-
-    private async Task AttemptReconnectAsync(CancellationToken token)
-    {
-        if (token.IsCancellationRequested) return;
-
-        var retryCount = 0;
-        while (!token.IsCancellationRequested && !IsConnected)
+        catch (Exception ex)
         {
-            retryCount++;
-            var delay = TimeSpan.FromSeconds(Math.Min(30, Math.Pow(2, retryCount))); // 指数退避
-            await Task.Delay(delay, token);
-
-            try
-            {
-                await ConnectInternalAsync(token);
-                _receiveTask = Task.Run(() => ReceiveLoopAsync(token), token);
-                break;
-            }
-            catch
-            {
-            }
+            await NotifyDisconnectedOnceAsync($"接收异常: {ex.Message}");
         }
     }
 
-    private async Task TriggerDisconnectedAsync(string reason)
+    private async Task NotifyDisconnectedOnceAsync(string reason)
     {
+        if (Interlocked.Exchange(ref _disconnectNotified, 1) == 1)
+        {
+            return;
+        }
+
         if (OnDisconnected != null)
         {
             await OnDisconnected.Invoke(reason);
@@ -204,22 +161,26 @@ public class WebSocketClient : IWebSocketClient
     public async Task DisconnectAsync()
     {
         _cts?.Cancel();
+
         if (_webSocket?.State == WebSocketState.Open)
         {
             try
             {
-                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", CancellationToken.None);
+                await _webSocket.CloseAsync(
+                    WebSocketCloseStatus.NormalClosure, "Client closed", CancellationToken.None);
             }
-            catch 
+            catch
             {
             }
         }
 
         _webSocket?.Dispose();
         _webSocket = null;
+
         if (_receiveTask != null)
         {
             try { await _receiveTask; } catch { }
+            _receiveTask = null;
         }
     }
 
