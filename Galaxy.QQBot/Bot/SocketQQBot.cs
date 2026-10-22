@@ -111,7 +111,8 @@ public class SocketQQBot : IDisposable
 
         if (payload.op == (int)OpCode.Hello)
         {
-            _context.HeartBeatInterval = payload.d.heartbeat_interval;
+            dynamic d = payload.d;
+            _context.HeartBeatInterval = d.heartbeat_interval;
         }
         else if (payload.op == (int)OpCode.Dispatch)
         {
@@ -123,7 +124,7 @@ public class SocketQQBot : IDisposable
 
                 try
                 {
-                    ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.d.ToString());
+                    ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.d.ToString()!)!;
                     _context.SessionId = readyData.session_id;
                     _logger.LogInformation("Bot 登录成功 (READY)，SessionId: {sid}", readyData.session_id);
                 }
@@ -138,22 +139,22 @@ public class SocketQQBot : IDisposable
             }
             else if (payload.t == "C2C_MESSAGE_CREATE")
             {
-                C2cEventData data = _jsonHelper.DeserializeElement<C2cEventData>(payload.d.ToString());
+                C2cEventData data = _jsonHelper.DeserializeElement<C2cEventData>(payload.d.ToString()!)!;
                 // TODO: 处理单聊消息
             }
             else if (payload.t == "GROUP_AT_MESSAGE_CREATE")
             {
-                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.d.ToString());
+                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.d.ToString()!)!;
                 // TODO: 处理群聊艾特
             }
             else if (payload.t == "GROUP_MESSAGE_CREATE")
             {
-                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.d.ToString());
+                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.d.ToString()!)!;
                 // TODO: 处理群聊消息
             }
             else if (payload.t == "INTERACTION_CREATE")
             {
-                InteractionEventData data = _jsonHelper.DeserializeElement<InteractionEventData>(payload.d.ToString());
+                InteractionEventData data = _jsonHelper.DeserializeElement<InteractionEventData>(payload.d.ToString()!)!;
                 // TODO: 处理交互事件
             }
         }
