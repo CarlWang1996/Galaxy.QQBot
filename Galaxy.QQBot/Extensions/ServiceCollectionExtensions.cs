@@ -25,7 +25,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IHeartbeatManager,HeartbeatManager>();
         services.AddSingleton<BotSessionContext>();
         services.AddSingleton<SocketQQBot>();
-        services.AddHostedService<QQBotHostedService>();
         return services;
     }
 }

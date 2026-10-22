@@ -1,6 +1,5 @@
-﻿using Galaxy.QQBot.Extensions;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+﻿using Galaxy.QQBot.Bot;
+using Microsoft.Extensions.Logging;
 
 namespace Galaxy.QQBot.Test;
 
@@ -8,13 +7,13 @@ public class Program
 {
     static async Task Main(string[] args)
     {
-        var builder = Host.CreateApplicationBuilder(args);
-        builder.Services.AddQQBot(builder => 
+        using var loggerFactory = LoggerFactory.Create(builder =>
         {
-            builder.UseAppCredentials("102077650", "5Oi2Ni4QnBZyNnDe5X0TxRwRxT0Y6fEo").UseShards(1);
+            builder.AddConsole().SetMinimumLevel(LogLevel.Debug);
         });
-        builder.Services.AddLogging();
-        var app = builder.Build();
-        await app.RunAsync();
+        SocketQQBot bot = new SocketQQBot("102077650", "5Oi2Ni4QnBZyNnDe5X0TxRwRxT0Y6fEo", 1, loggerFactory);
+        await bot.ConnectAsync();
+        await bot.LoginAsync();
+        Console.Read();
     }
 }

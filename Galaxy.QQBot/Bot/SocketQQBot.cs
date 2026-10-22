@@ -3,6 +3,7 @@ using Galaxy.QQBot.EventData;
 using Galaxy.QQBot.Manager;
 using Galaxy.QQBot.Tool;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -48,6 +49,19 @@ public class SocketQQBot : IDisposable
 
         _webSocket.OnMessageReceived += HandleMessageAsync;
         _webSocket.OnDisconnected += HandleDisconnectedAsync;
+    }
+
+    public SocketQQBot(string appId, string appSecret, int shards,ILoggerFactory? factory = null)
+    {
+        _options = new QQBotOptions() { AppId = appId, AppSecret = appSecret, Shards = shards };
+        _context = new BotSessionContext();
+        factory = factory ?? new NullLoggerFactory();
+        _webSocket = new WebSocketClient();
+        _httpHelper = new HttpHelper(new HttpClient());
+        _logger = factory.CreateLogger<SocketQQBot>();
+        _accessTokenManager = new AccessTokenManager(_httpHelper,factory.CreateLogger<AccessTokenManager>());
+        _botMessageManager = new BotMessageManager(_httpHelper, _accessTokenManager);
+        _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory.CreateLogger<HeartbeatManager>());
     }
 
     private async Task HandleDisconnectedAsync(string arg)
