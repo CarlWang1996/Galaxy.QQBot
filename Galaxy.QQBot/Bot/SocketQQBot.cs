@@ -106,7 +106,7 @@ public class SocketQQBot : IDisposable
             }
             else if (payload.t == "RESUMED")
             {
-                _logger.LogInformation("收到重连回复");
+                
             }
             else if (payload.t == "C2C_MESSAGE_CREATE")
             {
@@ -116,7 +116,6 @@ public class SocketQQBot : IDisposable
             else if(payload.t == "GROUP_AT_MESSAGE_CREATE")
             {
                 GroupEventData data = JsonConvert.DeserializeObject<GroupEventData>(payload.d.ToString());
-                await _botMessageManager.SendGroupMessageAsync(data.group_openid, messageId: data.id, sequence: 1, filePath: "F:\\工具\\1串口工具\\XCOM V2.0.exe");
             }
             else if(payload.t == "GROUP_MESSAGE_CREATE")
             {
@@ -127,7 +126,6 @@ public class SocketQQBot : IDisposable
                 InteractionEventData data = JsonConvert.DeserializeObject<InteractionEventData>(payload.d.ToString());
             }
         }
-        
     }
 
     private async Task StartHeartBeatAsync(CancellationToken token)
@@ -139,7 +137,6 @@ public class SocketQQBot : IDisposable
             await _webSocket.SendAsync(json);
             await Task.Delay(_heartBeatInterval, token);
         }
-        
     }
 
     public async Task ConnectAsync()
