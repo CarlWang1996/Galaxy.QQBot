@@ -118,7 +118,6 @@ public class BotMessageManager : IBotMessageManager
     public async Task ResponedAsync(string eventId)
     {
         string url = $"{Constants.BaseUrl}interactions/{eventId}";
-
         await _httpHelper.PutAsync(url, _accessTokenManager.AccessToken, new { code = 0 });
     }
 
@@ -137,23 +136,52 @@ public class BotMessageManager : IBotMessageManager
             Md510m = await FileMd5Helper.GetPartialMd5Async(filePath)
         };
 
-        string prepareJson = await _httpHelper.PostAsync($"{baseUrl}/upload_prepare", _accessTokenManager.AccessToken, prepareReq);
+        string prepareJson = await _httpHelper.PostAsync(
+            $"{baseUrl}/upload_prepare", _accessTokenManager.AccessToken, prepareReq);
         var prepareResp = _jsonHelper.DeserializeElement<BotUploadPrepareResponse>(prepareJson)!;
-        using Stream stream = File.OpenRead(filePath);
-        foreach (var block in prepareResp.Parts.OrderBy(s => s.Index))
+        var parts = prepareResp.Parts.OrderBy(s => s.Index).ToList();
+        if (parts.Count == 0)
         {
-            byte[] blockBuffer = new byte[int.Parse(block.BlockSize)];
-            int n = await stream.ReadAsync(blockBuffer.AsMemory(0, blockBuffer.Length));
-            if (n == 0)
+            throw new InvalidOperationException("upload_prepare 未返回任何分块信息。");
+        }
+
+        long declaredTotal = 0;
+        foreach (var p in parts)
+        {
+            declaredTotal += long.Parse(p.BlockSize);
+        }
+
+        if (declaredTotal != fileInfo.Length)
+        {
+            throw new InvalidOperationException(
+                $"分块总大小({declaredTotal})与文件大小({fileInfo.Length})不一致，终止上传。");
+        }
+
+        await using FileStream stream = new FileStream(
+            filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            bufferSize: 64 * 1024, useAsync: true);
+
+        using var md5 = System.Security.Cryptography.MD5.Create();
+
+        long uploadedTotal = 0;
+
+        for (int i = 0; i < parts.Count; i++)
+        {
+            var block = parts[i];
+            int expectedSize = int.Parse(block.BlockSize);
+            bool isLastBlock = i == parts.Count - 1;
+            byte[] blockBuffer = new byte[expectedSize];
+            int n = await ReadFullyAsync(stream, blockBuffer, 0, expectedSize);
+
+            if (n != expectedSize)
             {
-                break;
+                throw new InvalidOperationException(
+                    $"分块 {block.Index} 读取不完整：期望 {expectedSize} 字节，实际 {n} 字节。");
             }
 
-            byte[] exactData = new byte[n];
-            Array.Copy(blockBuffer, exactData, n);
-            await _httpHelper.PutAsyncWithoutToken(block.PresignedUrl, exactData);
-            using var md5 = System.Security.Cryptography.MD5.Create();
-            string blockMd5 = Convert.ToHexString(md5.ComputeHash(exactData)).ToLowerInvariant();
+            await _httpHelper.PutAsyncWithoutToken(block.PresignedUrl, blockBuffer);
+            string blockMd5 = Convert.ToHexString(md5.ComputeHash(blockBuffer)).ToLowerInvariant();
+
             await _httpHelper.PostAsync(
                 $"{baseUrl}/upload_part_finish",
                 _accessTokenManager.AccessToken,
@@ -164,6 +192,14 @@ public class BotMessageManager : IBotMessageManager
                     block_size = n.ToString(),
                     md5 = blockMd5
                 });
+
+            uploadedTotal += n;
+        }
+
+        if (uploadedTotal != fileInfo.Length)
+        {
+            throw new InvalidOperationException(
+                $"上传总大小({uploadedTotal})与文件大小({fileInfo.Length})不一致，终止合并。");
         }
 
         var mergeReq = new
@@ -174,8 +210,28 @@ public class BotMessageManager : IBotMessageManager
             file_name = Path.GetFileName(filePath)
         };
 
-        string mergeJson = await _httpHelper.PostAsync($"{baseUrl}/files", _accessTokenManager.AccessToken, mergeReq);
+        string mergeJson = await _httpHelper.PostAsync(
+            $"{baseUrl}/files", _accessTokenManager.AccessToken, mergeReq);
         var mergeResp = _jsonHelper.DeserializeElement<BotUploadResponse>(mergeJson);
         return mergeResp?.FileInfo!;
+    }
+
+    private static async Task<int> ReadFullyAsync(
+        Stream stream, byte[] buffer, int offset, int count)
+    {
+        int totalRead = 0;
+        while (totalRead < count)
+        {
+            int read = await stream.ReadAsync(
+                buffer.AsMemory(offset + totalRead, count - totalRead));
+            if (read == 0)
+            {
+                break; // EOF
+            }
+
+            totalRead += read;
+        }
+
+        return totalRead;
     }
 }

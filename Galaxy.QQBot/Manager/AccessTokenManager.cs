@@ -16,9 +16,10 @@ public class AccessTokenManager : IAccessTokenManager
 {
     private readonly IHttpHelper _httpHelper;
     private readonly ILogger _logger;
+    private readonly object _sync = new();
     private string _accessToken = string.Empty;
-    private static readonly object tokenLock = new object();
-    private readonly TaskCompletionSource<string> _tokenReadyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource<string> _tokenReadyTcs =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public AccessTokenManager(IHttpHelper httpHelper, ILogger<AccessTokenManager> logger)
     {
@@ -30,7 +31,7 @@ public class AccessTokenManager : IAccessTokenManager
     {
         get
         {
-            lock (tokenLock)
+            lock (_sync)
             {
                 return _accessToken;
             }
@@ -39,57 +40,60 @@ public class AccessTokenManager : IAccessTokenManager
 
     public Task<string> WaitForTokenAsync(CancellationToken ct = default)
     {
-        if (!string.IsNullOrEmpty(AccessToken))
+        Task<string> task;
+        lock (_sync)
         {
-            return Task.FromResult(AccessToken);
+            if (!string.IsNullOrEmpty(_accessToken))
+            {
+                return Task.FromResult(_accessToken);
+            }
+
+            task = _tokenReadyTcs.Task;
         }
 
-        return _tokenReadyTcs.Task.WaitAsync(ct);
+        return task.WaitAsync(ct);
     }
 
     public async Task StartGetAccessToken(string appId, string clientSecret, CancellationToken clt)
     {
         do
         {
-            int expiresIn = 0;
             try
             {
-                var result = await _httpHelper.PostAsyncWithOutToken($"{Constants.BaseUrl}app/getAppAccessToken", new { appId, clientSecret });
+                var result = await _httpHelper.PostAsyncWithOutToken(
+                    $"{Constants.BaseUrl}app/getAppAccessToken",
+                    new { appId, clientSecret });
+
                 using var doc = JsonDocument.Parse(result);
                 var root = doc.RootElement;
+
                 if (root.TryGetProperty("code", out var codeElement))
                 {
                     int code = codeElement.GetInt32();
-                    _logger.LogError($"获取AccessToken失败,错误码:{code}");
+                    _logger.LogError("获取AccessToken失败,错误码:{code}", code);
 
-                    var ex = new Exception($"获取AccessToken失败,错误码:{code}");
-                    if (!_tokenReadyTcs.Task.IsCompleted)
-                    {
-                        _tokenReadyTcs.TrySetException(ex);
-                    }
-                    throw ex;
+                    NotifyCurrentWaiterFailed(
+                        new Exception($"获取AccessToken失败,错误码:{code}"));
+
+                    await SafeDelayAsync(TimeSpan.FromSeconds(5), clt);
+                    continue;
                 }
 
                 if (root.TryGetProperty("access_token", out var tokenElement) &&
                     root.TryGetProperty("expires_in", out var expiresElement))
                 {
                     string token = tokenElement.GetString()!;
-                    expiresIn = int.Parse(expiresElement.GetString()!);
+                    int expiresIn = int.Parse(expiresElement.GetString()!);
 
-                    lock (tokenLock)
-                    {
-                        _accessToken = token;
-                        _tokenReadyTcs.TrySetResult(_accessToken);
-                        _logger.LogInformation("获取accessToken成功");
-                    }
+                    PublishToken(token);
 
                     int delaySeconds = Math.Max(expiresIn - 30, 5);
-                    await Task.Delay(delaySeconds * 1000, clt);
+                    await SafeDelayAsync(TimeSpan.FromSeconds(delaySeconds), clt);
                 }
                 else
                 {
                     _logger.LogWarning("解析 Token 响应失败，缺失字段: {result}", result);
-                    await Task.Delay(5000, clt);
+                    await SafeDelayAsync(TimeSpan.FromSeconds(5), clt);
                 }
             }
             catch (OperationCanceledException)
@@ -99,16 +103,58 @@ public class AccessTokenManager : IAccessTokenManager
             catch (Exception ex)
             {
                 _logger.LogError(ex, "刷新 Token 异常");
+                NotifyCurrentWaiterFailed(ex);
 
-                try
-                {
-                    await Task.Delay(5000, clt);
-                }
-                catch (OperationCanceledException)
+                if (!await SafeDelayAsync(TimeSpan.FromSeconds(5), clt))
                 {
                     break;
                 }
             }
         } while (!clt.IsCancellationRequested);
+    }
+
+    private void PublishToken(string token)
+    {
+        TaskCompletionSource<string> toComplete;
+        lock (_sync)
+        {
+            _accessToken = token;
+            if (_tokenReadyTcs.Task.IsCompleted)
+            {
+                _tokenReadyTcs = new TaskCompletionSource<string>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            toComplete = _tokenReadyTcs;
+        }
+
+        toComplete.TrySetResult(token);
+        _logger.LogInformation("获取accessToken成功");
+    }
+
+    private void NotifyCurrentWaiterFailed(Exception ex)
+    {
+        TaskCompletionSource<string> oldTcs;
+        lock (_sync)
+        {
+            oldTcs = _tokenReadyTcs;
+            _tokenReadyTcs = new TaskCompletionSource<string>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        oldTcs.TrySetException(ex);
+    }
+
+    private static async Task<bool> SafeDelayAsync(TimeSpan delay, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(delay, ct);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
     }
 }

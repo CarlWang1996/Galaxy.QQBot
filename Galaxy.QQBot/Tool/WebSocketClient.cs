@@ -20,10 +20,6 @@ public interface IWebSocketClient : IAsyncDisposable
     Task DisconnectAsync();
 }
 
-/// <summary>
-/// 纯 WebSocket 客户端：只负责“连接 + 收发”，不做任何重连决策。
-/// 重连策略统一由上层（SocketQQBot）控制。
-/// </summary>
 public class WebSocketClient : IWebSocketClient
 {
     private ClientWebSocket? _webSocket;
@@ -33,6 +29,7 @@ public class WebSocketClient : IWebSocketClient
     private string _url = string.Empty;
     private readonly int _bufferSize = 1024 * 4;
     private int _disconnectNotified = 0;
+    public Action<Exception>? OnHandlerError { get; set; }
     public bool IsConnected => _webSocket?.State == WebSocketState.Open;
     public event Func<string, Task>? OnMessageReceived;
     public event Func<string, Task>? OnDisconnected;
@@ -44,13 +41,15 @@ public class WebSocketClient : IWebSocketClient
             return;
         }
 
+        await StopReceiveLoopAsync();
         _url = url;
         _cts?.Dispose();
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         Interlocked.Exchange(ref _disconnectNotified, 0);
         await ConnectInternalAsync(_cts.Token);
-
-        _receiveTask = Task.Run(() => ReceiveLoopAsync(_cts.Token), _cts.Token);
+        var socket = _webSocket!;
+        var token = _cts.Token;
+        _receiveTask = Task.Run(() => ReceiveLoopAsync(socket, token), token);
     }
 
     private async Task ConnectInternalAsync(CancellationToken token)
@@ -101,18 +100,18 @@ public class WebSocketClient : IWebSocketClient
         }
     }
 
-    private async Task ReceiveLoopAsync(CancellationToken token)
+    private async Task ReceiveLoopAsync(ClientWebSocket socket, CancellationToken token)
     {
         var buffer = new byte[_bufferSize];
         try
         {
-            while (!token.IsCancellationRequested && _webSocket?.State == WebSocketState.Open)
+            while (!token.IsCancellationRequested && socket.State == WebSocketState.Open)
             {
                 using var ms = new MemoryStream();
                 WebSocketReceiveResult result;
                 do
                 {
-                    result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), token);
+                    result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), token);
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
@@ -128,20 +127,44 @@ public class WebSocketClient : IWebSocketClient
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
                     var message = Encoding.UTF8.GetString(ms.ToArray());
-                    if (OnMessageReceived != null)
-                    {
-                        await OnMessageReceived.Invoke(message);
-                    }
+                    await SafeInvokeMessageHandlersAsync(message);
                 }
             }
         }
         catch (OperationCanceledException)
         {
-            
+        }
+        catch (WebSocketException ex)
+        {
+            await NotifyDisconnectedOnceAsync($"接收异常: {ex.Message}");
         }
         catch (Exception ex)
         {
-            await NotifyDisconnectedOnceAsync($"接收异常: {ex.Message}");
+            if (ReferenceEquals(_webSocket, socket))
+            {
+                await NotifyDisconnectedOnceAsync($"接收异常: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task SafeInvokeMessageHandlersAsync(string message)
+    {
+        var handler = OnMessageReceived;
+        if (handler == null)
+        {
+            return;
+        }
+
+        foreach (var d in handler.GetInvocationList())
+        {
+            try
+            {
+                await ((Func<string, Task>)d).Invoke(message);
+            }
+            catch (Exception ex)
+            {
+                OnHandlerError?.Invoke(ex);
+            }
         }
     }
 
@@ -152,10 +175,29 @@ public class WebSocketClient : IWebSocketClient
             return;
         }
 
-        if (OnDisconnected != null)
+        var handler = OnDisconnected;
+        if (handler != null)
         {
-            await OnDisconnected.Invoke(reason);
+            try
+            {
+                await handler.Invoke(reason);
+            }
+            catch (Exception ex)
+            {
+                OnHandlerError?.Invoke(ex);
+            }
         }
+    }
+
+    private async Task StopReceiveLoopAsync()
+    {
+        if (_receiveTask == null)
+        {
+            return;
+        }
+
+        try { await _receiveTask; } catch { }
+        _receiveTask = null;
     }
 
     public async Task DisconnectAsync()
@@ -174,14 +216,9 @@ public class WebSocketClient : IWebSocketClient
             }
         }
 
+        await StopReceiveLoopAsync();
         _webSocket?.Dispose();
         _webSocket = null;
-
-        if (_receiveTask != null)
-        {
-            try { await _receiveTask; } catch { }
-            _receiveTask = null;
-        }
     }
 
     public async ValueTask DisposeAsync()
