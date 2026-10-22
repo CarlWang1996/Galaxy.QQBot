@@ -40,8 +40,8 @@ public class HeartbeatManager: IHeartbeatManager
                 // 从上下文动态获取最新的 LastS
                 Payload pay = new Payload()
                 {
-                    op = (int)OpCode.Heartbeat,
-                    d = _context.LastS!
+                    Op = (int)OpCode.Heartbeat,
+                    D = _context.LastS!
                 };
                 string json = _jsonHelper.Serialize(pay);
 

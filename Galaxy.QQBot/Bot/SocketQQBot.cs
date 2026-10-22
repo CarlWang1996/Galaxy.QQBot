@@ -108,22 +108,22 @@ public class SocketQQBot : IDisposable
     {
         Payload payload = _jsonHelper.DeserializeElement<Payload>(arg)!;
 
-        if (payload.op == (int)OpCode.Hello)
+        if (payload.Op == (int)OpCode.Hello)
         {
-            var d = _jsonHelper.DeserializeElement<HelloData>(payload.d)!;
+            var d = _jsonHelper.DeserializeElement<HelloData>(payload.D)!;
             _context.HeartBeatInterval = d.heartbeat_interval;
         }
-        else if (payload.op == (int)OpCode.Dispatch)
+        else if (payload.Op == (int)OpCode.Dispatch)
         {
-            _context.LastS = payload.s;
+            _context.LastS = payload.S;
 
-            if (payload.t == "READY")
+            if (payload.T == "READY")
             {
                 _ = _heartbeatManager.RunAsync(_source.Token);
 
                 try
                 {
-                    ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.d.ToString()!)!;
+                    ReadyEventData readyData = _jsonHelper.DeserializeElement<ReadyEventData>(payload.D.ToString()!)!;
                     _context.SessionId = readyData.session_id;
                     _logger.LogInformation("Bot 登录成功 (READY)，SessionId: {sid}", readyData.session_id);
                 }
@@ -132,28 +132,28 @@ public class SocketQQBot : IDisposable
                     _logger.LogError(ex, "解析或推送 READY 事件失败");
                 }
             }
-            else if (payload.t == "RESUMED")
+            else if (payload.T == "RESUMED")
             {
                 _logger.LogInformation("重连成功 (RESUMED)，恢复接收事件");
             }
-            else if (payload.t == "C2C_MESSAGE_CREATE")
+            else if (payload.T == "C2C_MESSAGE_CREATE")
             {
-                C2cEventData data = _jsonHelper.DeserializeElement<C2cEventData>(payload.d.ToString()!)!;
+                C2cEventData data = _jsonHelper.DeserializeElement<C2cEventData>(payload.D.ToString()!)!;
                 // TODO: 处理单聊消息
             }
-            else if (payload.t == "GROUP_AT_MESSAGE_CREATE")
+            else if (payload.T == "GROUP_AT_MESSAGE_CREATE")
             {
-                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.d.ToString()!)!;
+                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
                 // TODO: 处理群聊艾特
             }
-            else if (payload.t == "GROUP_MESSAGE_CREATE")
+            else if (payload.T == "GROUP_MESSAGE_CREATE")
             {
-                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.d.ToString()!)!;
+                GroupEventData data = _jsonHelper.DeserializeElement<GroupEventData>(payload.D.ToString()!)!;
                 // TODO: 处理群聊消息
             }
-            else if (payload.t == "INTERACTION_CREATE")
+            else if (payload.T == "INTERACTION_CREATE")
             {
-                InteractionEventData data = _jsonHelper.DeserializeElement<InteractionEventData>(payload.d.ToString()!)!;
+                InteractionEventData data = _jsonHelper.DeserializeElement<InteractionEventData>(payload.D.ToString()!)!;
                 // TODO: 处理交互事件
             }
         }
@@ -173,8 +173,8 @@ public class SocketQQBot : IDisposable
     {
         Payload payload = new Payload()
         {
-            op = 2,
-            d = new
+            Op = 2,
+            D = new
             {
                 token = $"QQBot {_accessTokenManager.AccessToken}",
                 intents = Intents.GROUP_AND_C2C_EVENT | Intents.INTERACTION,
@@ -195,8 +195,8 @@ public class SocketQQBot : IDisposable
     {
         Payload pay = new Payload()
         {
-            op = (int)OpCode.Resume,
-            d = new
+            Op = (int)OpCode.Resume,
+            D = new
             {
                 token = $"QQBot {_accessTokenManager.AccessToken}",
                 session_id = _context.SessionId,
