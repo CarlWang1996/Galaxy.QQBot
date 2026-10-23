@@ -17,15 +17,13 @@
 - **AppSecret 泄露**：用户已到平台重置该密钥，历史中的旧密钥已失效；当前代码树仍从环境变量读取。
 - **5 秒保护未真正限时**：已改为 `await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5))`（`WebSocketClient.cs:180`）。
 
-当前无“严重”和“中等”问题，剩余均为轻微 / 代码质量问题（约 19 项）。
-
-可选后续：保存重连任务句柄以便 `DisposeAsync` 等待（轻微问题 19）；其余轻微问题按迭代清理。
+当前无“严重”和“中等”问题，剩余均为轻微 / 代码质量问题（约 18 项），可按迭代清理。
 
 | 级别 | 数量 |
 | --- | --- |
 | 严重 | 0 |
 | 中等 | 0 |
-| 轻微 / 代码质量 | 约 19 |
+| 轻微 / 代码质量 | 约 18 |
 
 ---
 
@@ -123,7 +121,7 @@
 16. **`BotMessageManager` / `AccessTokenManager` 直接读取 `AccessToken`**：在未启动或 token 过期瞬间可能为空字符串，建议发送前确保 token 可用。
 17. **`StopReceiveLoopAsync` 超时后静默继续**：`WebSocketClient.cs:178-186` 的 `catch { }` 会在 5 秒超时后照样把 `_receiveTask` 置 null，旧接收循环可能仍在运行，随后访问已释放的 socket 再抛异常退出。不会再死锁，但建议至少对 `TimeoutException` 记录一条警告。
 18. **`EnsureHeartbeatLoopStarted` 抛异常的副作用**：`ShardConnection.cs:458-465` 在 `HeartBeatInterval <= 0` 时抛 `InvalidOperationException`。这消除了 `Task.Delay(0)` 紧循环，但如果 `Hello` 解析失败后收到 `READY`，异常会让整个 READY 处理中断（SessionId 不会被设置）。建议改为“记录警告 + 使用默认间隔（如 30s）”而不是抛异常。
-19. **重连任务无法在 Dispose 时等待**：与问题 1 相关，建议保存 `_reconnectTask`，在 `ShardConnection.DisposeAsync` 中等待/取消后退出，避免释放资源时重连流程仍在跑。
+19. **重连任务无法在 Dispose 时等待 —— ✅ 已修复**：`ShardConnection` 保存 `_reconnectTask`，`DisposeAsync` 先取消再等待其退出，并再次停止心跳；同时 WebSocket 连接与 gateway 请求使用取消令牌，避免释放资源时仍有重连流程在跑。
 
 ---
 
@@ -141,6 +139,7 @@
 - ✅ **请求体未忽略 null**：`JsonHelper` 增加共享 options，并在 `HttpHelper` 的 `JsonContent.Create` 中显式传入（否则实际 HTTP 请求不会生效）。
 - ✅ **Subject 并发 / async void 示例**：`SocketQQBot` 用 `Subject.Synchronize` 包装 `OnNext`；测试示例改为显式 `Task.Run` + `try/catch`。
 - ✅ **C2C 使用 openid**：`C2cEventData.ReplyAsync` 改为 `Author.UserOpenid` 并做空值校验。
+- ✅ **重连任务未在 Dispose 时等待**：保存 `_reconnectTask`，`DisposeAsync` 取消后等待其退出；`ConnectAsync` 的 HTTP/WebSocket 调用传入 `_linkedSource.Token`，确保取消能及时中断。
 - ✅ **AppSecret 明文**：当前代码树已改为环境变量；用户已在平台重置密钥，历史中的旧密钥已失效。若仓库仍需对外分享，建议仍用 `git filter-repo` / BFG 清理历史。
 - ✅ **5 秒保护并未真正限时**：已改为 `await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5))`。
 - ✅ access_token 明文日志：已移除，仅记录“获取成功”。
@@ -164,5 +163,4 @@
 
 ## 五、建议修复优先级
 
-1. 保存重连任务句柄（轻微问题 19）。
-2. 其余轻微问题按迭代逐步清理（见第三节）。
+1. 其余轻微问题按迭代逐步清理（见第三节）。

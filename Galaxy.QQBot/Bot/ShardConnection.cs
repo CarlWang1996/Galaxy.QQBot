@@ -23,6 +23,8 @@ internal sealed class ShardConnection : IAsyncDisposable
     private readonly CancellationTokenSource _linkedSource;
     private readonly BotMessageManager _botMessageManager;
     private int _reconnecting = 0;
+    private readonly object _reconnectTaskLock = new();
+    private Task? _reconnectTask;
     private readonly object _heartbeatLock = new();
     private Task? _heartbeatTask;
     private CancellationTokenSource? _heartbeatCts;
@@ -70,7 +72,16 @@ internal sealed class ShardConnection : IAsyncDisposable
 
     public async Task StartAsync()
     {
-        await TryReconnectAsync(InitialConnectMaxAttempts, immediateFirstAttempt: true);
+        Task task = TryReconnectAsync(InitialConnectMaxAttempts, immediateFirstAttempt: true);
+        lock (_reconnectTaskLock)
+        {
+            if (_reconnectTask is null or { IsCompleted: true })
+            {
+                _reconnectTask = task;
+            }
+        }
+
+        await task;
     }
 
     private async Task ConnectAsync()
@@ -81,9 +92,9 @@ internal sealed class ShardConnection : IAsyncDisposable
         }
 
         await _accessTokenManager.WaitForTokenAsync(_linkedSource.Token);
-        string obj = await _httpHelper.GetAsync($"{Constants.BaseUrl}gateway", _accessTokenManager.AccessToken);
+        string obj = await _httpHelper.GetAsync($"{Constants.BaseUrl}gateway", _accessTokenManager.AccessToken, _linkedSource.Token);
         var response = JsonHelper.DeserializeElement<GatewayResponse>(obj)!;
-        await _webSocket.ConnectAsync(response.url);
+        await _webSocket.ConnectAsync(response.url, _linkedSource.Token);
         _logger.LogInformation("[shard {id}/{total}] 连接成功", _shardId, _shardTotal);
     }
 
@@ -153,7 +164,7 @@ internal sealed class ShardConnection : IAsyncDisposable
             _logger.LogDebug("[shard {id}] 尝试重连...", _shardId);
         }
 
-        _ = ReconnectSafeAsync();
+        ScheduleReconnect();
     }
 
     private async Task TryReconnectAsync(int maxAttempts = int.MaxValue, bool immediateFirstAttempt = false)
@@ -226,8 +237,29 @@ internal sealed class ShardConnection : IAsyncDisposable
 
             if (!exhausted && !_terminal && !_linkedSource.IsCancellationRequested && !_webSocket.IsConnected)
             {
-                _ = ReconnectSafeAsync();
+                ScheduleReconnectFromCurrent();
             }
+        }
+    }
+
+    private void ScheduleReconnect()
+    {
+        lock (_reconnectTaskLock)
+        {
+            if (_reconnectTask is { IsCompleted: false })
+            {
+                return;
+            }
+
+            _reconnectTask = ReconnectSafeAsync();
+        }
+    }
+
+    private void ScheduleReconnectFromCurrent()
+    {
+        lock (_reconnectTaskLock)
+        {
+            _reconnectTask = ReconnectSafeAsync();
         }
     }
 
@@ -518,6 +550,25 @@ internal sealed class ShardConnection : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _linkedSource.Cancel();
+        StopHeartbeatLoop();
+
+        Task? reconnectTask;
+        lock (_reconnectTaskLock)
+        {
+            reconnectTask = _reconnectTask;
+        }
+
+        if (reconnectTask != null)
+        {
+            try
+            {
+                await reconnectTask;
+            }
+            catch
+            {
+            }
+        }
+
         StopHeartbeatLoop();
 
         try
