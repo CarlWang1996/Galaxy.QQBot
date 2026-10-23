@@ -3,7 +3,7 @@
 - 项目：Galaxy.QQBot
 - 审查范围：`Galaxy.QQBot`、`Galaxy.QQBot.Test`（`Galaxy.QQBot.DependencyInjection` 已无源码且不在解决方案中）
 - 审查日期：2026-10-23（心跳、密钥、5 秒保护修复后复核）
-- 构建结果：`Galaxy.QQBot` 编译通过，0 警告 0 错误；整个解决方案因程序正在运行、`bin\...\Galaxy.QQBot.dll` 被占用而无法完成构建（环境问题，非代码错误）
+- 构建结果：解决方案编译通过，0 警告 0 错误（使用临时 `OutputPath` 避免运行中 `Galaxy.QQBot.dll` 被占用）
 - 说明：本轮仍以只读审查为主；本文档汇总第一轮修复情况与当前仍存在的问题。
 
 ---
@@ -16,14 +16,15 @@
 - **Resume 后心跳不重启**：重连 Resume 分支已调用 `EnsureHeartbeatLoopStarted()`（`ShardConnection.cs:178-179`），并新增心跳间隔校验。
 - **AppSecret 泄露**：用户已到平台重置该密钥，历史中的旧密钥已失效；当前代码树仍从环境变量读取。
 - **5 秒保护未真正限时**：已改为 `await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5))`（`WebSocketClient.cs:180`）。
+- **轻微问题 1-5**：`LastS` 原子化、`expires_in` 兼容解析、启动 token 失败重试、等待 `Hello` 后 `Identify`、`DisposeAsync` 等待刷新任务并释放 `_readySubject`。
 
-当前无“严重”和“中等”问题，剩余均为轻微 / 代码质量问题（约 18 项），可按迭代清理。
+当前无“严重”和“中等”问题，剩余均为轻微 / 代码质量问题（约 13 项），可按迭代清理。
 
 | 级别 | 数量 |
 | --- | --- |
 | 严重 | 0 |
 | 中等 | 0 |
-| 轻微 / 代码质量 | 约 18 |
+| 轻微 / 代码质量 | 约 13 |
 
 ---
 
@@ -99,11 +100,11 @@
 
 ## 三、轻微 / 代码质量
 
-1. **`LastS` 跨线程读写非原子**：`int?` 在接收线程写（`ShardConnection.cs:302`）、心跳线程读（`HeartbeatManager.cs:32`），`BotSessionContext.cs:5`。建议用 `Volatile`/`Interlocked` 或原子包装类型。
-2. **`expires_in` 用 `GetString()` 解析**：`AccessTokenManager.cs:72`。官方字段表标注为 number、示例是 string；若某环境返回数字会抛异常并进入 5 秒重试。建议兼容 `number` 和 `string`。
-3. **首次 token 获取失败会让启动直接失败**：`AccessTokenManager.WaitForTokenAsync` 会把单次失败暴露给调用方，`SocketQQBot.StartAsync`（`:59`）随即抛出，而后台刷新循环其实还会继续重试。建议启动阶段对瞬时失败做重试/等待。
-4. **Identify 发送早于 Hello**：`ShardConnection.cs:69-70` 连接后立刻 `IdentifyAsync`（`:87-103`），严格按协议应等待 `Hello`，风险较低但建议按协议处理。
-5. **`DisposeAsync` 细节**：`SocketQQBot.cs:143-159` 未等待 `_tokenRefreshTask` 就 `_httpHelper.Dispose()`（`:146`、`:153`），可能在途请求抛 `ObjectDisposedException`；`_readySubject` 漏了 Dispose（`:155-158`）。
+1. **`LastS` 跨线程读写非原子 —— ✅ 已修复**：`BotSessionContext` 改用 `int` 后备字段（`-1` 表示 null），读写分别通过 `Volatile.Read` / `Volatile.Write`，接收线程写入与心跳线程读取不再有撕裂风险。
+2. **`expires_in` 解析不健壮 —— ✅ 已修复**：新增 `TryGetExpiresIn`，同时兼容 `string` 与 `number`（含整数值的浮点数），非法值记录警告后进入 5 秒重试，不再抛异常。
+3. **首次 token 获取失败会让启动直接失败 —— ✅ 已修复**：`WaitForTokenAsync` 在单次获取失败后继续等待后台刷新循环的下一轮（直到取消）；`StartAsync` 不再因瞬时失败直接退出。
+4. **Identify 发送早于 Hello —— ✅ 已修复**：每次新建连接时创建 `TaskCompletionSource`，`ConnectAsync` 等待 `Hello`（30 秒超时）后才发送 `Identify`/`Resume`；超时或 Hello 解析失败会断开当前连接并走重连。
+5. **`DisposeAsync` 细节 —— ✅ 已修复**：`StopTokenRefreshLoopAsync` 取消后等待 `_tokenRefreshTask` 退出，再释放 `_httpHelper`；token 请求也传入取消令牌；`_readySubject` 已补充 Dispose。
 6. **`StartAsync` 非幂等**：`SocketQQBot.cs:56-95` 未清空 `_shards`，重复调用会产生重复连接；也不等待 READY 就返回。
 7. **WebSocket 连接未使用 shard 的取消令牌**：`ShardConnection.cs:83` 调用 `_webSocket.ConnectAsync(response.url)` 未传 `_linkedSource.Token`，关闭/取消时可能等待网络超时。
 8. **关闭握手未完成**：`WebSocketClient.cs:96-100` 收到 Close 后直接返回，未 `CloseOutputAsync`；`Dispose` 时状态已是 `CloseReceived`，不会再发关闭帧（`WebSocketClient.cs:194`）。

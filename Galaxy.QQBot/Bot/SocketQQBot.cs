@@ -130,33 +130,52 @@ public class SocketQQBot : IAsyncDisposable
         }
     }
 
-    private void StopTokenRefreshLoop()
+    private async Task StopTokenRefreshLoopAsync()
     {
+        Task? task;
         lock (_tokenLock)
         {
             if (_tokenRefreshCts == null)
             {
                 return;
-            }   
-            try 
-            { 
-                _tokenRefreshCts.Cancel(); 
             }
-            catch 
+
+            try
+            {
+                _tokenRefreshCts.Cancel();
+            }
+            catch
             {
             }
 
-            _tokenRefreshCts.Dispose();
+            task = _tokenRefreshTask;
+        }
+
+        if (task != null)
+        {
+            try
+            {
+                await task;
+            }
+            catch
+            {
+            }
+        }
+
+        lock (_tokenLock)
+        {
+            _tokenRefreshCts?.Dispose();
             _tokenRefreshCts = null;
             _tokenRefreshTask = null;
-            _logger.LogDebug("已停止 Token 刷新循环。");
         }
+
+        _logger.LogDebug("已停止 Token 刷新循环。");
     }
 
     public async ValueTask DisposeAsync()
     {
         _source.Cancel();
-        StopTokenRefreshLoop();
+        await StopTokenRefreshLoopAsync();
 
         foreach (var shard in _shards)
         {
@@ -169,5 +188,6 @@ public class SocketQQBot : IAsyncDisposable
         _groupAtSubject.Dispose();
         _groupSubject.Dispose();
         _interactionSubject.Dispose();
+        _readySubject.Dispose();
     }
 }

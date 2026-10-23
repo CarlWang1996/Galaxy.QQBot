@@ -31,20 +31,34 @@ internal class AccessTokenManager
         }
     }
 
-    public Task<string> WaitForTokenAsync(CancellationToken ct = default)
+    public async Task<string> WaitForTokenAsync(CancellationToken ct = default)
     {
-        Task<string> task;
-        lock (_sync)
+        while (true)
         {
-            if (!string.IsNullOrEmpty(_accessToken))
+            Task<string> task;
+            lock (_sync)
             {
-                return Task.FromResult(_accessToken);
+                if (!string.IsNullOrEmpty(_accessToken))
+                {
+                    return _accessToken;
+                }
+
+                task = _tokenReadyTcs.Task;
             }
 
-            task = _tokenReadyTcs.Task;
+            try
+            {
+                return await task.WaitAsync(ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "获取 AccessToken 失败，等待刷新循环重试");
+            }
         }
-
-        return task.WaitAsync(ct);
     }
 
     public async Task StartGetAccessToken(string appId, string clientSecret, CancellationToken clt)
@@ -53,7 +67,7 @@ internal class AccessTokenManager
         {
             try
             {
-                var result = await _httpHelper.PostAsyncWithOutToken($"{Constants.BaseUrl}app/getAppAccessToken", new { appId, clientSecret });
+                var result = await _httpHelper.PostAsyncWithOutToken($"{Constants.BaseUrl}app/getAppAccessToken", new { appId, clientSecret }, clt);
                 using var doc = JsonDocument.Parse(result);
                 var root = doc.RootElement;
 
@@ -69,15 +83,13 @@ internal class AccessTokenManager
                 if (root.TryGetProperty("access_token", out var tokenElement) && root.TryGetProperty("expires_in", out var expiresElement))
                 {
                     string token = tokenElement.GetString()!;
-                    int expiresIn;
-                    if (expiresElement.ValueKind == JsonValueKind.String)
+                    if (!TryGetExpiresIn(expiresElement, out int expiresIn))
                     {
-                        expiresIn = int.Parse(expiresElement.GetString()!);
+                        _logger.LogWarning("expires_in 格式无法解析: {value}", expiresElement.GetRawText());
+                        await SafeDelayAsync(TimeSpan.FromSeconds(5), clt);
+                        continue;
                     }
-                    else
-                    {
-                        expiresIn = expiresElement.GetInt32();
-                    }
+
                     PublishToken(token);
                     int delaySeconds = Math.Max(expiresIn - 30, 5);
                     await SafeDelayAsync(TimeSpan.FromSeconds(delaySeconds), clt);
@@ -88,7 +100,7 @@ internal class AccessTokenManager
                     await SafeDelayAsync(TimeSpan.FromSeconds(5), clt);
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (clt.IsCancellationRequested)
             {
                 break;
             }
@@ -133,6 +145,32 @@ internal class AccessTokenManager
         }
 
         oldTcs.TrySetException(ex);
+    }
+
+    private static bool TryGetExpiresIn(JsonElement element, out int expiresIn)
+    {
+        expiresIn = 0;
+
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            return int.TryParse(element.GetString(), out expiresIn) && expiresIn > 0;
+        }
+
+        if (element.ValueKind == JsonValueKind.Number)
+        {
+            if (element.TryGetInt32(out expiresIn))
+            {
+                return expiresIn > 0;
+            }
+
+            if (element.TryGetDouble(out double seconds) && seconds > 0 && seconds <= int.MaxValue)
+            {
+                expiresIn = (int)seconds;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static async Task<bool> SafeDelayAsync(TimeSpan delay, CancellationToken ct)

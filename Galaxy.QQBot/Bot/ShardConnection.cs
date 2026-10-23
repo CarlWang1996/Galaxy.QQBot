@@ -30,6 +30,7 @@ internal sealed class ShardConnection : IAsyncDisposable
     private CancellationTokenSource? _heartbeatCts;
 
     private volatile bool _terminal;
+    private volatile TaskCompletionSource? _helloTcs;
 
     private readonly Action<C2cEventData>? _onC2cMessage;
     private readonly Action<GroupEventData>? _onGroupAtMessage;
@@ -88,14 +89,48 @@ internal sealed class ShardConnection : IAsyncDisposable
     {
         if (_webSocket.IsConnected)
         {
+            await WaitForHelloAsync();
             return;
         }
 
         await _accessTokenManager.WaitForTokenAsync(_linkedSource.Token);
         string obj = await _httpHelper.GetAsync($"{Constants.BaseUrl}gateway", _accessTokenManager.AccessToken, _linkedSource.Token);
         var response = JsonHelper.DeserializeElement<GatewayResponse>(obj)!;
+        var helloTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _helloTcs = helloTcs;
         await _webSocket.ConnectAsync(response.url, _linkedSource.Token);
+        await WaitForHelloAsync(helloTcs);
         _logger.LogInformation("[shard {id}/{total}] 连接成功", _shardId, _shardTotal);
+    }
+
+    private async Task WaitForHelloAsync(TaskCompletionSource? helloTcs = null)
+    {
+        helloTcs ??= _helloTcs;
+        if (helloTcs == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await helloTcs.Task.WaitAsync(TimeSpan.FromSeconds(30), _linkedSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            try
+            {
+                await _webSocket.DisconnectAsync();
+            }
+            catch
+            {
+            }
+
+            throw;
+        }
     }
 
     private async Task IdentifyAsync()
@@ -307,10 +342,12 @@ internal sealed class ShardConnection : IAsyncDisposable
                     var d = JsonHelper.DeserializeElement<HelloData>(payload.D)!;
                     _context.HeartBeatInterval = d.heartbeat_interval;
                     _logger.LogDebug("[shard {id}] 收到 Hello，心跳间隔 {interval}ms", _shardId, d.heartbeat_interval);
+                    _helloTcs?.TrySetResult();
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "[shard {id}] 解析 Hello 失败", _shardId);
+                    _helloTcs?.TrySetException(ex);
                 }
 
                 break;
