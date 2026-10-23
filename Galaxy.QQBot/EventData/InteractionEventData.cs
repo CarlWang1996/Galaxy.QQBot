@@ -45,7 +45,7 @@ public record class InteractionEventData
 
     private int _seq = 0;
 
-    public async Task ReplyAsync(string? content = null, BotMarkdown? markdown = null, BotKeyboard? keyboard = null, BotFileInfo? fileinfo = null, CancellationToken cancellationToken = default)
+    public async Task ReplyAsync(string? content = null, string? markdown = null, BotKeyboard? keyboard = null, BotFileInfo? fileinfo = null, CancellationToken cancellationToken = default)
     {
         if (MessageManager == null)
         {
@@ -62,7 +62,7 @@ public record class InteractionEventData
                 eventId: Id,
                 sequence: currentSeq,
                 content: content,
-                markdown: markdown,
+                markdown: string.IsNullOrEmpty(markdown) ? null : new BotMarkdown() { Content = markdown },
                 keyboard: keyboard,
                 fileinfo: fileinfo,
                 cancellationToken: cancellationToken);
@@ -74,7 +74,7 @@ public record class InteractionEventData
                 eventId: Id,
                 sequence: currentSeq,
                 content: content,
-                markdown: markdown,
+                markdown: string.IsNullOrEmpty(markdown) ? null : new BotMarkdown() { Content = markdown },
                 keyboard: keyboard,
                 fileinfo: fileinfo,
                 cancellationToken: cancellationToken

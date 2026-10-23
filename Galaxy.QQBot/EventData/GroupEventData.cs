@@ -46,7 +46,7 @@ public record class GroupEventData
 
     private int _seq = 0;
 
-    public async Task ReplyAsync(string? content = null, BotMarkdown? markdown = null, BotKeyboard? keyboard = null, BotFileInfo? fileinfo = null)
+    public async Task ReplyAsync(string? content = null, string? markdown = null, BotKeyboard? keyboard = null, BotFileInfo? fileinfo = null)
     {
         if (MessageManager == null)
         {
@@ -59,7 +59,7 @@ public record class GroupEventData
             messageId: Id,
             sequence: currentSeq,
             content: content,
-            markdown: markdown,
+            markdown: string.IsNullOrEmpty(markdown) ? null : new BotMarkdown() { Content = markdown },
             keyboard: keyboard,
             fileinfo: fileinfo
         );
