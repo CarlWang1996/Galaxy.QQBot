@@ -23,9 +23,9 @@ internal sealed class ShardConnection : IAsyncDisposable
     private readonly CancellationTokenSource _linkedSource;
     private readonly BotMessageManager _botMessageManager;
     private int _reconnecting = 0;
-    private readonly object _reconnectTaskLock = new();
+    private readonly Lock _reconnectTaskLock = new();
     private Task? _reconnectTask;
-    private readonly object _heartbeatLock = new();
+    private readonly Lock _heartbeatLock = new();
     private Task? _heartbeatTask;
     private CancellationTokenSource? _heartbeatCts;
 
@@ -43,13 +43,13 @@ internal sealed class ShardConnection : IAsyncDisposable
         ILoggerFactory factory, 
         HttpHelper httpHelper, 
         AccessTokenManager accessTokenManager, 
-        CancellationToken parentToken,
         BotMessageManager botMessageManager,
         Action<C2cEventData>? onC2cMessage,
         Action<GroupEventData>? onGroupAtMessage,
         Action<GroupEventData>? onGroupMessage,
         Action<InteractionEventData>? onInteraction,
-        Action<ReadyEventData>? onReady)
+        Action<ReadyEventData>? onReady,
+        CancellationToken parentToken)
     {
         _shardId = shardId;
         _shardTotal = shardTotal;
@@ -100,7 +100,7 @@ internal sealed class ShardConnection : IAsyncDisposable
 
     private async Task IdentifyAsync()
     {
-        Payload payload = new Payload
+        Payload payload = new()
         {
             Op = (int)OpCode.Identify,
             D = new
@@ -118,7 +118,7 @@ internal sealed class ShardConnection : IAsyncDisposable
 
     private async Task ResumeAsync()
     {
-        Payload pay = new Payload
+        Payload pay = new()
         {
             Op = (int)OpCode.Resume,
             D = new

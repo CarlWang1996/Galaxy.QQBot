@@ -21,8 +21,8 @@ public class SocketQQBot : IAsyncDisposable
     private readonly AccessTokenManager _accessTokenManager;
     private readonly BotMessageManager _botMessageManager;
     private readonly CancellationTokenSource _source = new();
-    private readonly List<ShardConnection> _shards = new();
-    private readonly object _tokenLock = new();
+    private readonly List<ShardConnection> _shards = [];
+    private readonly Lock _tokenLock = new();
     private Task? _tokenRefreshTask;
     private CancellationTokenSource? _tokenRefreshCts;
     public BotMessageManager Messages => _botMessageManager;
@@ -53,7 +53,7 @@ public class SocketQQBot : IAsyncDisposable
         }
     }
 
-    public async Task StartAsync(CancellationToken ct = default)
+    public async Task StartAsync()
     {
         EnsureTokenRefreshLoopStarted();
         await _accessTokenManager.WaitForTokenAsync(_source.Token);
@@ -74,13 +74,13 @@ public class SocketQQBot : IAsyncDisposable
                 _loggerFactory, 
                 _httpHelper, 
                 _accessTokenManager, 
-                _source.Token,
                 _botMessageManager,
                 onC2cMessage: data => Subject.Synchronize(_c2cSubject).OnNext(data),
                 onGroupMessage: data => Subject.Synchronize(_groupSubject).OnNext(data),
                 onGroupAtMessage: data => Subject.Synchronize(_groupAtSubject).OnNext(data),
                 onInteraction: data => Subject.Synchronize(_interactionSubject).OnNext(data),
-                onReady: data => Subject.Synchronize(_readySubject).OnNext(data));
+                onReady: data => Subject.Synchronize(_readySubject).OnNext(data),
+                parentToken:_source.Token);
             _shards.Add(shard);
             try
             {

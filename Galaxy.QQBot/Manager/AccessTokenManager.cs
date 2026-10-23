@@ -69,7 +69,15 @@ internal class AccessTokenManager
                 if (root.TryGetProperty("access_token", out var tokenElement) && root.TryGetProperty("expires_in", out var expiresElement))
                 {
                     string token = tokenElement.GetString()!;
-                    int expiresIn = int.Parse(expiresElement.GetString()!);
+                    int expiresIn;
+                    if (expiresElement.ValueKind == JsonValueKind.String)
+                    {
+                        expiresIn = int.Parse(expiresElement.GetString()!);
+                    }
+                    else
+                    {
+                        expiresIn = expiresElement.GetInt32();
+                    }
                     PublishToken(token);
                     int delaySeconds = Math.Max(expiresIn - 30, 5);
                     await SafeDelayAsync(TimeSpan.FromSeconds(delaySeconds), clt);
