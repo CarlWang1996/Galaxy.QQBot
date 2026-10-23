@@ -8,6 +8,8 @@ namespace Galaxy.QQBot.Bot;
 
 internal sealed class ShardConnection : IAsyncDisposable
 {
+    private const int InitialConnectMaxAttempts = 5;
+
     private record GatewayResponse(string url);
     private record HelloData(int heartbeat_interval);
     private readonly int _shardId;
@@ -68,8 +70,7 @@ internal sealed class ShardConnection : IAsyncDisposable
 
     public async Task StartAsync()
     {
-        await ConnectAsync();
-        await IdentifyAsync();
+        await TryReconnectAsync(InitialConnectMaxAttempts, immediateFirstAttempt: true);
     }
 
     private async Task ConnectAsync()
@@ -128,6 +129,7 @@ internal sealed class ShardConnection : IAsyncDisposable
         if (arg.Contains("4914") || arg.Contains("4915") || arg.Contains("4013") || arg.Contains("4014"))
         {
             _terminal = true;
+            StopHeartbeatLoop();
             _logger.LogError("[shard {id}] 机器人已下架/封禁/Intent 无效或无权限，停止重连。", _shardId);
             return;
         }
@@ -154,7 +156,7 @@ internal sealed class ShardConnection : IAsyncDisposable
         _ = ReconnectSafeAsync();
     }
 
-    private async Task TryReconnectAsync()
+    private async Task TryReconnectAsync(int maxAttempts = int.MaxValue, bool immediateFirstAttempt = false)
     {
         if (Interlocked.Exchange(ref _reconnecting, 1) == 1)
         {
@@ -162,15 +164,26 @@ internal sealed class ShardConnection : IAsyncDisposable
             return;
         }
 
+        Exception? lastError = null;
+        var exhausted = false;
+
         try
         {
             StopHeartbeatLoop();
             var retry = 0;
 
-            while (!_linkedSource.IsCancellationRequested)
+            while (!_linkedSource.IsCancellationRequested && !_terminal)
             {
+                if (retry >= maxAttempts)
+                {
+                    exhausted = true;
+                    throw new InvalidOperationException($"[shard {_shardId}] 连接失败，已尝试 {retry} 次。", lastError);
+                }
+
                 retry++;
-                var delay = TimeSpan.FromSeconds(Math.Min(30, Math.Pow(2, retry - 1)));
+                var delay = immediateFirstAttempt && retry == 1
+                    ? TimeSpan.Zero
+                    : TimeSpan.FromSeconds(Math.Min(30, Math.Pow(2, retry - 1)));
 
                 try
                 {
@@ -196,15 +209,22 @@ internal sealed class ShardConnection : IAsyncDisposable
                 }
                 catch (Exception ex)
                 {
+                    lastError = ex;
                     _logger.LogWarning(ex, "[shard {id}] 第 {retry} 次重连失败，继续重试", _shardId, retry);
                 }
+            }
+
+            if (_terminal && !_linkedSource.IsCancellationRequested)
+            {
+                exhausted = true;
+                throw new InvalidOperationException($"[shard {_shardId}] 已进入终止状态，停止连接。");
             }
         }
         finally
         {
             Interlocked.Exchange(ref _reconnecting, 0);
 
-            if (!_terminal && !_linkedSource.IsCancellationRequested && !_webSocket.IsConnected)
+            if (!exhausted && !_terminal && !_linkedSource.IsCancellationRequested && !_webSocket.IsConnected)
             {
                 _ = ReconnectSafeAsync();
             }
@@ -439,7 +459,9 @@ internal sealed class ShardConnection : IAsyncDisposable
     {
         lock (_heartbeatLock)
         {
-            if(_context.HeartBeatInterval <= 0)
+            if (_terminal) return;
+
+            if (_context.HeartBeatInterval <= 0)
             {
                 throw new InvalidOperationException("心跳间隔必须大于0");
             }

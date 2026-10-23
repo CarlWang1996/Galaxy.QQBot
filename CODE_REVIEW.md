@@ -17,16 +17,18 @@
 - **AppSecret 泄露**：用户已到平台重置该密钥，历史中的旧密钥已失效；当前代码树仍从环境变量读取。
 - **5 秒保护未真正限时**：已改为 `await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5))`（`WebSocketClient.cs:180`）。
 
-当前已无“严重”问题。剩余重点是：
+当前无“严重”问题，连接相关的“中等”问题已全部修复。剩余中等：
 
-1. **首次连接失败没有重试**，且启动失败会被静默吞掉（见问题 3）。
-2. 终态断开未停心跳、请求体不忽略 null、`Subject` 并发 / async void、C2C openid 等（见问题 4-7）。
-3. 重连 Task 已改为可观察；可选保存句柄以便 `DisposeAsync` 等待（见轻微问题 19）。
+1. 请求体忽略 null（问题 5）。
+2. 多分片 `Subject` 并发 / 示例 async void（问题 6）。
+3. C2C 回复 openid 字段（问题 7）。
+
+另有可选后续：保存重连任务句柄以便 `DisposeAsync` 等待（轻微问题 19）；其余轻微问题按迭代清理。
 
 | 级别 | 数量 |
 | --- | --- |
 | 严重 | 0 |
-| 中等 | 6 |
+| 中等 | 3 |
 | 轻微 / 代码质量 | 约 19 |
 
 ---
@@ -50,21 +52,18 @@
 
 ## 二、中等问题
 
-### 3. 初始连接失败没有重试，且启动失败会被静默吞掉
+### 3. 初始连接失败没有重试，且启动失败会被静默吞掉 —— ✅ 已修复
 
-- 位置：
-  - `Galaxy.QQBot/Bot/SocketQQBot.cs:69-92`（逐 shard `StartAsync`，异常只记日志）
-  - `Galaxy.QQBot/Bot/ShardConnection.cs:67-71`（`StartAsync` = `ConnectAsync` + `IdentifyAsync`，无重试）
-- 问题：
-  - `TryReconnectAsync` 只在“已建立的连接断开”时才会被触发；如果**首次连接**就失败（网络、网关、token 等），不会进入重连流程，该 shard 就此失效。
-  - `SocketQQBot.StartAsync` 捕获异常后继续，即使所有 shard 都失败也返回成功，调用方无法感知“其实没连上”。
-- 建议：首次连接失败也走统一的重试/退避逻辑；全部 shard 失败时向上抛出或提供明确的状态回调。
+- 原问题：首次连接失败不会进入重连流程；`SocketQQBot.StartAsync` 吞掉每个 shard 的异常，全部失败也返回成功。
+- 修复：
+  - `ShardConnection.StartAsync` 改为调用 `TryReconnectAsync(InitialConnectMaxAttempts, immediateFirstAttempt: true)`（`ShardConnection.cs:71-74`）：首次立即尝试，失败后按 1/2/4/8/16 秒退避，最多 5 次；耗尽后抛 `InvalidOperationException`（内含最后一次异常）。
+  - `TryReconnectAsync` 新增 `maxAttempts` / `immediateFirstAttempt` 参数；仅在“耗尽”时抛出，成功返回后的窗口断线仍由 `finally` 补偿（`ShardConnection.cs:157-230`）。
+  - `SocketQQBot.StartAsync` 收集每个 shard 的失败（`SocketQQBot.cs:69-105`）：全部失败抛 `AggregateException`，部分失败记录警告后继续，不再静默。
+- 说明：运行期断线仍走无限重连；只有初始启动有次数上限。
 
-### 4. 终态断开（4914/4915/4013/4014）没有停止心跳循环
+### 4. 终态断开（4914/4915/4013/4014）没有停止心跳循环 —— ✅ 已修复
 
-- 位置：`Galaxy.QQBot/Bot/ShardConnection.cs:126-130`
-- 问题：该分支直接 `return`，但心跳循环仍在后台运行，会持续向已断开的 socket 发送心跳并反复报错（日志刷屏）。
-- 建议：该分支中调用 `StopHeartbeatLoop()`，并标记 shard 为终止状态。
+- 修复：终态分支设置 `_terminal = true` 并调用 `StopHeartbeatLoop()`（`ShardConnection.cs:129-135`）；`EnsureHeartbeatLoopStarted` 增加 `_terminal` 守卫（`ShardConnection.cs:462`），避免与重连线程竞态时又把心跳拉起来。
 
 ### 5. 请求体不会忽略 null 字段
 
@@ -107,7 +106,7 @@
     ```
 
 - 验证：`Galaxy.QQBot` 编译 0 警告 0 错误。
-- 注：本次只修兜底重连；终态分支仍未调用 `StopHeartbeatLoop()`，见问题 4。
+- 终态分支现已在问题 4 的修复中调用 `StopHeartbeatLoop()`。
 
 ---
 
@@ -144,10 +143,12 @@
 以下问题在当前代码中已确认修复：
 
 - ✅ **断线重连自锁死**：已通过 `_ = ReconnectSafeAsync()`、`_cts?.Cancel()` 前置、`StopReceiveLoopAsync` 等待保护解决（残留见轻微问题 17、19）。
-- ✅ **重连 Task 未观察**：已改为 `ReconnectSafeAsync()` 包装并在外层记录异常（`ShardConnection.cs:151`、`:211`）。
-- ✅ **重连窗口期丢断开通知**：`finally` 中复位 guard 后已补一次 `IsConnected` 检查（`ShardConnection.cs:200-208`）。
-- ✅ **重连兜底绕过终态码**：已增加 `_terminal` 标记并在 `finally` 中排除（`ShardConnection.cs:128-132`、`:206`）。
-- ✅ **Resume 成功后心跳不重启**：已在 `ResumeAsync()` 后调用 `EnsureHeartbeatLoopStarted()`（`ShardConnection.cs:178-179`）。
+- ✅ **重连 Task 未观察**：已改为 `ReconnectSafeAsync()` 包装并在外层记录异常（`ShardConnection.cs:154`、`:234`）。
+- ✅ **重连窗口期丢断开通知**：`finally` 中复位 guard 后已补一次 `IsConnected` 检查（`ShardConnection.cs:223-230`）。
+- ✅ **重连兜底绕过终态码**：已增加 `_terminal` 标记并在 `finally` 中排除（`ShardConnection.cs:129-135`、`:227`）。
+- ✅ **初始连接失败无重试 / 启动失败被吞**：`ShardConnection.StartAsync` 改为最多 5 次、首次立即尝试的退避重试，耗尽后抛出；`SocketQQBot.StartAsync` 汇总失败，全部失败抛 `AggregateException`，部分失败记录警告（`ShardConnection.cs:71-74`、`SocketQQBot.cs:69-105`）。
+- ✅ **终态断开未停心跳**：终态分支调用 `StopHeartbeatLoop()`，且 `EnsureHeartbeatLoopStarted` 增加 `_terminal` 守卫（`ShardConnection.cs:129-135`、`:462`）。
+- ✅ **Resume 成功后心跳不重启**：已在 `ResumeAsync()` 后调用 `EnsureHeartbeatLoopStarted()`（`ShardConnection.cs:194-195`）。
 - ✅ **AppSecret 明文**：当前代码树已改为环境变量；用户已在平台重置密钥，历史中的旧密钥已失效。若仓库仍需对外分享，建议仍用 `git filter-repo` / BFG 清理历史。
 - ✅ **5 秒保护并未真正限时**：已改为 `await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5))`。
 - ✅ access_token 明文日志：已移除，仅记录“获取成功”。
@@ -165,15 +166,13 @@
 - ✅ 分片只连 shard 0：已按 `shards` 循环建立连接。
 - ✅ HTTP 请求/响应未释放：已改为 `using`。
 - ✅ DI 生命周期错配：DI 项目已移除（遗留空目录待清理）。
-- ✅ 4914/4915 被内部重连：WebSocketClient 不再自动重连（但需补停止心跳，见中等问题 4）。
+- ✅ 4914/4915 被内部重连：WebSocketClient 不再自动重连；终态心跳已在问题 4 修复。
 
 ---
 
 ## 五、建议修复优先级
 
-1. 首次连接失败重试 + 启动失败上报（中等问题 3）。
-2. 终态断开停止心跳（中等问题 4）。
+1. 请求体忽略 null（中等问题 5）与 Subject 并发 / async void（中等问题 6）。
+2. C2C openid 字段修正（中等问题 7）。
 3. 保存重连任务句柄（轻微问题 19）。
-4. 请求体忽略 null（中等问题 5）与 Subject 并发 / async void（中等问题 6）。
-5. C2C openid 字段修正（中等问题 7）。
-6. 其余轻微问题按迭代逐步清理。
+4. 其余轻微问题按迭代逐步清理。

@@ -66,6 +66,8 @@ public class SocketQQBot : IAsyncDisposable
             throw new InvalidOperationException($"剩余连接数不足：需要 {total}，剩余 {limit.remaining}。");
         }
 
+        var failures = new List<Exception>();
+
         for (int i = 0; i < total; i++)
         {
             var shard = new ShardConnection(i, total, 
@@ -83,15 +85,26 @@ public class SocketQQBot : IAsyncDisposable
             try
             {
                 await shard.StartAsync();
-                _logger.LogDebug("shard {id}/{total} 已发起 Identify", i, total);
+                _logger.LogInformation("shard {id}/{total} 启动成功", i, total);
             }
             catch (Exception ex)
             {
+                failures.Add(ex);
                 _logger.LogError(ex, "shard {id}/{total} 启动失败", i, total);
             }
         }
 
-        _logger.LogInformation("Bot 已启动，shards={shards}）", total);
+        if (failures.Count == total)
+        {
+            throw new AggregateException($"所有 {total} 个 shard 均启动失败。", failures);
+        }
+
+        if (failures.Count > 0)
+        {
+            _logger.LogWarning("{failed}/{total} 个 shard 启动失败，Bot 将以剩余分片继续运行。", failures.Count, total);
+        }
+
+        _logger.LogInformation("Bot 已启动，shards={shards}", total);
     }
 
     private void EnsureTokenRefreshLoopStarted()
