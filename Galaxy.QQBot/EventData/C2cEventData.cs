@@ -47,9 +47,15 @@ public record class C2cEventData
             throw new InvalidOperationException("MessageManager 尚未初始化，无法直接回复。请确保消息是由 SocketQQBot 接收的。");
         }
 
+        string? userOpenid = Author?.UserOpenid;
+        if (string.IsNullOrEmpty(userOpenid))
+        {
+            throw new InvalidOperationException("C2C 事件缺少 author.user_openid，无法回复。");
+        }
+
         int currentSeq = Interlocked.Increment(ref _seq);
         await MessageManager.SendC2cMessageAsync(
-            userId: Author.Id,
+            userId: userOpenid,
             messageId: Id,
             sequence: currentSeq,
             content: content,

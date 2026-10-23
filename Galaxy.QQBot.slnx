@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/解决方案项/">
+    <File Path="CODE_REVIEW.md" />
+  </Folder>
   <Project Path="Galaxy.QQBot.Test/Galaxy.QQBot.Test.csproj" />
   <Project Path="Galaxy.QQBot/Galaxy.QQBot.csproj" />
 </Solution>

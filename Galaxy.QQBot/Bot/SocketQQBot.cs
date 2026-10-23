@@ -76,11 +76,11 @@ public class SocketQQBot : IAsyncDisposable
                 _accessTokenManager, 
                 _source.Token,
                 _botMessageManager,
-                onC2cMessage: data => _c2cSubject.OnNext(data),
-                onGroupMessage: data => _groupSubject.OnNext(data),
-                onGroupAtMessage: data => _groupAtSubject.OnNext(data),
-                onInteraction: data => _interactionSubject.OnNext(data),
-                onReady: data => _readySubject.OnNext(data));
+                onC2cMessage: data => Subject.Synchronize(_c2cSubject).OnNext(data),
+                onGroupMessage: data => Subject.Synchronize(_groupSubject).OnNext(data),
+                onGroupAtMessage: data => Subject.Synchronize(_groupAtSubject).OnNext(data),
+                onInteraction: data => Subject.Synchronize(_interactionSubject).OnNext(data),
+                onReady: data => Subject.Synchronize(_readySubject).OnNext(data));
             _shards.Add(shard);
             try
             {

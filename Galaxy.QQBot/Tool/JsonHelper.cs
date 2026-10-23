@@ -1,9 +1,15 @@
 ﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Galaxy.QQBot.Tool;
 
 internal static class JsonHelper
 {
+    internal static readonly JsonSerializerOptions Options = new JsonSerializerOptions
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
     public static string Serialize<T>(T obj)
     {
         if (obj == null)
@@ -11,7 +17,7 @@ internal static class JsonHelper
             return string.Empty;
         }
 
-        return JsonSerializer.Serialize(obj);
+        return JsonSerializer.Serialize(obj, Options);
     }
 
     public static T? Deserialize<T>(string json)

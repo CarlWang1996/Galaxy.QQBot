@@ -16,11 +16,18 @@ public class Program
         string appId = Environment.GetEnvironmentVariable("BotId", EnvironmentVariableTarget.Machine)!;
         string appSecret = Environment.GetEnvironmentVariable("BotSecret", EnvironmentVariableTarget.Machine)!;
         SocketQQBot bot = new SocketQQBot(appId, appSecret, loggerFactory);
-        bot.GroupAtMessages.Subscribe(async s => 
+        bot.GroupAtMessages.Subscribe(s => _ = Task.Run(async () =>
         {
-            await s.ReplyAsync("1");
-            await s.ReplyAsync("2");
-        });
+            try
+            {
+                await s.ReplyAsync("1");
+                await s.ReplyAsync("2");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"处理群消息失败: {ex}");
+            }
+        }));
         await bot.StartAsync();
         Console.Read();
     }

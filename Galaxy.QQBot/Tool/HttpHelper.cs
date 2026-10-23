@@ -60,14 +60,14 @@ internal class HttpHelper : IDisposable
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Headers.Add("Authorization", $"QQBot {token}");
-        request.Content = JsonContent.Create(data);
+        request.Content = JsonContent.Create(data, options: JsonHelper.Options);
         return await SendAsync(request, cancellationToken);
     }
 
     public async Task<string> PostAsyncWithOutToken<T>(string url, T data, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Content = JsonContent.Create(data);
+        request.Content = JsonContent.Create(data, options: JsonHelper.Options);
         return await SendAsync(request, cancellationToken);
     }
 
@@ -75,7 +75,7 @@ internal class HttpHelper : IDisposable
     {
         using var request = new HttpRequestMessage(HttpMethod.Put, url);
         request.Headers.Add("Authorization", $"QQBot {token}");
-        request.Content = JsonContent.Create(data);
+        request.Content = JsonContent.Create(data, options: JsonHelper.Options);
         return await SendAsync(request, cancellationToken);
     }
 

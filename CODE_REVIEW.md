@@ -17,18 +17,14 @@
 - **AppSecret 泄露**：用户已到平台重置该密钥，历史中的旧密钥已失效；当前代码树仍从环境变量读取。
 - **5 秒保护未真正限时**：已改为 `await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5))`（`WebSocketClient.cs:180`）。
 
-当前无“严重”问题，连接相关的“中等”问题已全部修复。剩余中等：
+当前无“严重”和“中等”问题，剩余均为轻微 / 代码质量问题（约 19 项）。
 
-1. 请求体忽略 null（问题 5）。
-2. 多分片 `Subject` 并发 / 示例 async void（问题 6）。
-3. C2C 回复 openid 字段（问题 7）。
-
-另有可选后续：保存重连任务句柄以便 `DisposeAsync` 等待（轻微问题 19）；其余轻微问题按迭代清理。
+可选后续：保存重连任务句柄以便 `DisposeAsync` 等待（轻微问题 19）；其余轻微问题按迭代清理。
 
 | 级别 | 数量 |
 | --- | --- |
 | 严重 | 0 |
-| 中等 | 3 |
+| 中等 | 0 |
 | 轻微 / 代码质量 | 约 19 |
 
 ---
@@ -65,31 +61,24 @@
 
 - 修复：终态分支设置 `_terminal = true` 并调用 `StopHeartbeatLoop()`（`ShardConnection.cs:129-135`）；`EnsureHeartbeatLoopStarted` 增加 `_terminal` 守卫（`ShardConnection.cs:462`），避免与重连线程竞态时又把心跳拉起来。
 
-### 5. 请求体不会忽略 null 字段
+### 5. 请求体不会忽略 null 字段 —— ✅ 已修复
 
-- 位置：
-  - `Galaxy.QQBot/Tool/JsonHelper.cs:14`（默认 `JsonSerializer.Serialize`）
-  - `Galaxy.QQBot/Models/Message/SendBotMessageRequest.cs:7-38`（大量可空字段）
-  - `Galaxy.QQBot/Manager/BotMessageManager.cs:63`（未传 sequence 时 `MsgSeq = null`）
-- 问题：System.Text.Json 默认不忽略 null，`SendBotMessageRequest` 会序列化出 `"content": null`、`"msg_id": null`、`"event_id": null`、`"msg_seq": null`、`"markdown": null` 等字段。QQ 接口对部分字段的显式 null 可能返回 invalid request（如 11255）。
-- 建议：配置 `DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull`，或对相关属性加 `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`。
+- 修复：
+  - `JsonHelper` 新增共享 `JsonSerializerOptions`，设置 `DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull`，`Serialize` 改为传入该 options（`JsonHelper.cs:8-20`）。
+  - **关键**：HTTP 请求原来走 `JsonContent.Create(data)`，不会使用 `JsonHelper` 的 options；已在 `HttpHelper` 的 POST/PUT 中显式传入 `JsonHelper.Options`（`HttpHelper.cs:63`、`:70`、`:78`），否则该修复对实际发消息不生效。
+- 验证：`SendBotMessageRequest` 的 `MsgSeq = null` 等字段不再输出；编译 0 警告 0 错误。
 
-### 6. 多分片下 `Subject<T>` 并发不安全，且示例订阅是 async void
+### 6. 多分片下 `Subject<T>` 并发不安全，且示例订阅是 async void —— ✅ 已修复
 
-- 位置：
-  - `Galaxy.QQBot/Bot/SocketQQBot.cs:29-38`（Subject 定义）
-  - `Galaxy.QQBot/Bot/SocketQQBot.cs:77-81`（每个 ShardConnection 的接收线程都会调用 `OnNext`）
-  - `Galaxy.QQBot.Test/Program.cs:19`（`Subscribe(async s => ...)`）
-- 问题：
-  - 当 `shards > 1` 时，多个接收线程并发调用同一个 `Subject<T>.OnNext`；Rx 的 `Subject<T>` 不保证并发安全，可能丢事件或抛异常。
-  - `IObservable<T>.Subscribe(Action<T>)` 接收的是 `Action<T>`，`async` 表达式会变成 **async void**；`await` 之后的异常无法被捕获，可能直接终结进程。
-- 建议：使用 `Subject.Synchronize(...)` 或加锁后再 `OnNext`；文档/示例中改用 `SelectMany` 或显式 `Task.Run` 并处理异常，避免 async void。
+- 修复：
+  - `SocketQQBot` 新增内部 `SynchronizedSubject<T>`，用 `Subject.Synchronize` 包装 `OnNext`；5 个事件 Subject 全部替换（`SocketQQBot.cs:29-33`、`:174-189`），多分片并发推送不再直接调用裸 `Subject.OnNext`。
+  - 测试示例改为 `Task.Run` + `try/catch`，不再使用 `Subscribe(async s => ...)` 的 async void 形式（`Galaxy.QQBot.Test/Program.cs:19-30`）。
+- 说明：订阅方仍应避免在回调里长时间同步阻塞；需要异步处理时按示例显式包裹并捕获异常。
 
-### 7. C2C 回复使用了 `Author.Id` 而不是 `Author.UserOpenid`
+### 7. C2C 回复使用了 `Author.Id` 而不是 `Author.UserOpenid` —— ✅ 已修复
 
-- 位置：`Galaxy.QQBot/EventData/C2cEventData.cs:52`
-- 问题：官方单聊事件说明中发送目标应使用 `author.user_openid`。示例里 `id` 与 `user_openid` 通常相同，但字段语义不同，存在风险。
-- 建议：改为 `userId: Author.UserOpenid!`（并做空值校验）。
+- 修复：`C2cEventData.ReplyAsync` 改用 `author.user_openid`，并先取局部变量做空值校验（`C2cEventData.cs:50-59`）。空值改为抛 `InvalidOperationException`（原 `NullReferenceException` 语义不合适），同时消除可空性告警。
+- 验证：编译 0 警告 0 错误。
 
 ### 8. 重连兜底会绕过终态码（4914/4915/4013/4014）的停止逻辑 —— ✅ 已修复
 
@@ -133,7 +122,7 @@
 15. **命名/结构**：`ResponedAsync` 应为 `RespondedAsync`（`BotMessageManager.cs:91`）；`PostAsyncWithOutToken` 应为 `WithoutToken`（`HttpHelper.cs:67`）；`FileMd5Helper`/`FileHashHelper` 重复且位于全局命名空间，建议合并到 `Galaxy.QQBot.Tool`。
 16. **`BotMessageManager` / `AccessTokenManager` 直接读取 `AccessToken`**：在未启动或 token 过期瞬间可能为空字符串，建议发送前确保 token 可用。
 17. **`StopReceiveLoopAsync` 超时后静默继续**：`WebSocketClient.cs:178-186` 的 `catch { }` 会在 5 秒超时后照样把 `_receiveTask` 置 null，旧接收循环可能仍在运行，随后访问已释放的 socket 再抛异常退出。不会再死锁，但建议至少对 `TimeoutException` 记录一条警告。
-18. **`EnsureHeartbeatLoopStarted` 抛异常的副作用**：`ShardConnection.cs:414-421` 在 `HeartBeatInterval <= 0` 时抛 `InvalidOperationException`。这消除了 `Task.Delay(0)` 紧循环，但如果 `Hello` 解析失败后收到 `READY`，异常会让整个 READY 处理中断（SessionId 不会被设置）。建议改为“记录警告 + 使用默认间隔（如 30s）”而不是抛异常。
+18. **`EnsureHeartbeatLoopStarted` 抛异常的副作用**：`ShardConnection.cs:458-465` 在 `HeartBeatInterval <= 0` 时抛 `InvalidOperationException`。这消除了 `Task.Delay(0)` 紧循环，但如果 `Hello` 解析失败后收到 `READY`，异常会让整个 READY 处理中断（SessionId 不会被设置）。建议改为“记录警告 + 使用默认间隔（如 30s）”而不是抛异常。
 19. **重连任务无法在 Dispose 时等待**：与问题 1 相关，建议保存 `_reconnectTask`，在 `ShardConnection.DisposeAsync` 中等待/取消后退出，避免释放资源时重连流程仍在跑。
 
 ---
@@ -149,6 +138,9 @@
 - ✅ **初始连接失败无重试 / 启动失败被吞**：`ShardConnection.StartAsync` 改为最多 5 次、首次立即尝试的退避重试，耗尽后抛出；`SocketQQBot.StartAsync` 汇总失败，全部失败抛 `AggregateException`，部分失败记录警告（`ShardConnection.cs:71-74`、`SocketQQBot.cs:69-105`）。
 - ✅ **终态断开未停心跳**：终态分支调用 `StopHeartbeatLoop()`，且 `EnsureHeartbeatLoopStarted` 增加 `_terminal` 守卫（`ShardConnection.cs:129-135`、`:462`）。
 - ✅ **Resume 成功后心跳不重启**：已在 `ResumeAsync()` 后调用 `EnsureHeartbeatLoopStarted()`（`ShardConnection.cs:194-195`）。
+- ✅ **请求体未忽略 null**：`JsonHelper` 增加共享 options，并在 `HttpHelper` 的 `JsonContent.Create` 中显式传入（否则实际 HTTP 请求不会生效）。
+- ✅ **Subject 并发 / async void 示例**：`SocketQQBot` 用 `Subject.Synchronize` 包装 `OnNext`；测试示例改为显式 `Task.Run` + `try/catch`。
+- ✅ **C2C 使用 openid**：`C2cEventData.ReplyAsync` 改为 `Author.UserOpenid` 并做空值校验。
 - ✅ **AppSecret 明文**：当前代码树已改为环境变量；用户已在平台重置密钥，历史中的旧密钥已失效。若仓库仍需对外分享，建议仍用 `git filter-repo` / BFG 清理历史。
 - ✅ **5 秒保护并未真正限时**：已改为 `await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5))`。
 - ✅ access_token 明文日志：已移除，仅记录“获取成功”。
@@ -172,7 +164,5 @@
 
 ## 五、建议修复优先级
 
-1. 请求体忽略 null（中等问题 5）与 Subject 并发 / async void（中等问题 6）。
-2. C2C openid 字段修正（中等问题 7）。
-3. 保存重连任务句柄（轻微问题 19）。
-4. 其余轻微问题按迭代逐步清理。
+1. 保存重连任务句柄（轻微问题 19）。
+2. 其余轻微问题按迭代逐步清理（见第三节）。
