@@ -2,7 +2,7 @@
 
 - 项目：Galaxy.QQBot
 - 审查范围：`Galaxy.QQBot`、`Galaxy.QQBot.Test`（`Galaxy.QQBot.DependencyInjection` 已无源码且不在解决方案中）
-- 审查日期：2026-10-23（心跳、密钥、5 秒保护修复后复核）
+- 审查日期：2026-10-23（心跳、密钥、5 秒保护及轻微问题 1-10 修复后复核）
 - 构建结果：解决方案编译通过，0 警告 0 错误（使用临时 `OutputPath` 避免运行中 `Galaxy.QQBot.dll` 被占用）
 - 说明：本轮仍以只读审查为主；本文档汇总第一轮修复情况与当前仍存在的问题。
 
@@ -17,14 +17,15 @@
 - **AppSecret 泄露**：用户已到平台重置该密钥，历史中的旧密钥已失效；当前代码树仍从环境变量读取。
 - **5 秒保护未真正限时**：已改为 `await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5))`（`WebSocketClient.cs:180`）。
 - **轻微问题 1-5**：`LastS` 原子化、`expires_in` 兼容解析、启动 token 失败重试、等待 `Hello` 后 `Identify`、`DisposeAsync` 等待刷新任务并释放 `_readySubject`。
+- **轻微问题 6-10**：`StartAsync` 幂等并等待 `READY`、WebSocket 连接使用取消令牌、补全关闭握手、接线 `OnHandlerError`、交互事件在 `finally` 中 ACK。
 
-当前无“严重”和“中等”问题，剩余均为轻微 / 代码质量问题（约 13 项），可按迭代清理。
+当前无“严重”和“中等”问题，剩余均为轻微 / 代码质量问题（约 8 项），可按迭代清理。
 
 | 级别 | 数量 |
 | --- | --- |
 | 严重 | 0 |
 | 中等 | 0 |
-| 轻微 / 代码质量 | 约 13 |
+| 轻微 / 代码质量 | 约 8 |
 
 ---
 
@@ -105,11 +106,11 @@
 3. **首次 token 获取失败会让启动直接失败 —— ✅ 已修复**：`WaitForTokenAsync` 在单次获取失败后继续等待后台刷新循环的下一轮（直到取消）；`StartAsync` 不再因瞬时失败直接退出。
 4. **Identify 发送早于 Hello —— ✅ 已修复**：每次新建连接时创建 `TaskCompletionSource`，`ConnectAsync` 等待 `Hello`（30 秒超时）后才发送 `Identify`/`Resume`；超时或 Hello 解析失败会断开当前连接并走重连。
 5. **`DisposeAsync` 细节 —— ✅ 已修复**：`StopTokenRefreshLoopAsync` 取消后等待 `_tokenRefreshTask` 退出，再释放 `_httpHelper`；token 请求也传入取消令牌；`_readySubject` 已补充 Dispose。
-6. **`StartAsync` 非幂等**：`SocketQQBot.cs:56-95` 未清空 `_shards`，重复调用会产生重复连接；也不等待 READY 就返回。
-7. **WebSocket 连接未使用 shard 的取消令牌**：`ShardConnection.cs:83` 调用 `_webSocket.ConnectAsync(response.url)` 未传 `_linkedSource.Token`，关闭/取消时可能等待网络超时。
-8. **关闭握手未完成**：`WebSocketClient.cs:96-100` 收到 Close 后直接返回，未 `CloseOutputAsync`；`Dispose` 时状态已是 `CloseReceived`，不会再发关闭帧（`WebSocketClient.cs:194`）。
-9. **`OnHandlerError` 未接线**：`WebSocketClient.cs:15` 定义了错误回调，但 `ShardConnection.cs:57-58` 没有设置，消息处理器异常会被静默吞掉。
-10. **交互事件先发消息后 ACK**：`InteractionEventData.cs:79` 在发送成功后才 `ResponedAsync`；若发送抛异常则不会 ACK，可能导致平台侧交互失败。建议在 `finally` 中 ACK。
+6. **`StartAsync` 非幂等 —— ✅ 已修复**：新增 `_started` 原子守卫，重复调用抛 `InvalidOperationException`；`ShardConnection.StartAsync` 等待首个 `READY`/`RESUMED`（30 秒超时）后才返回，失败的 shard 会被释放并从列表移除。
+7. **WebSocket 连接未使用 shard 的取消令牌 —— ✅ 已修复（代码中已生效）**：`ShardConnection.ConnectAsync` 调用 `_webSocket.ConnectAsync(response.url, _linkedSource.Token)`，gateway 请求也传入同一令牌。
+8. **关闭握手未完成 —— ✅ 已修复**：接收循环收到 Close 且状态为 `CloseReceived` 时调用 `CloseOutputAsync`（5 秒超时）；`DisconnectAsync` 同样处理 `CloseReceived`，并用局部 socket 避免并发置空新连接。
+9. **`OnHandlerError` 未接线 —— ✅ 已修复**：`ShardConnection` 构造时将其接到 logger，消息处理器、断开回调、关闭握手中的异常都会被记录。
+10. **交互事件先发消息后 ACK —— ✅ 已修复**：`InteractionEventData.ReplyAsync` 将发送逻辑包在 `try/finally`，无论发送成功与否都会调用 `ResponedAsync(Id)`。
 11. **上传/哈希细节**：
     - `BotMessageManager.cs:139` 的 `isLastBlock` 声明后未使用；
     - `ReadFullyAsync`（`BotMessageManager.cs:180-195`）未接收取消令牌；

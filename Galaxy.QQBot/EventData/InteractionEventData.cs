@@ -53,29 +53,35 @@ public record class InteractionEventData
         }
 
         int currentSeq = Interlocked.Increment(ref _seq);
-        if (ChatType == 1)
+        try
         {
-            await MessageManager.SendGroupMessageAsync(
-            groupId: GroupOpenid!,
-            eventId: Id,
-            sequence: currentSeq,
-            content: content,
-            markdown: markdown,
-            keyboard: keyboard,
-            fileinfo: fileinfo);
+            if (ChatType == 1)
+            {
+                await MessageManager.SendGroupMessageAsync(
+                groupId: GroupOpenid!,
+                eventId: Id,
+                sequence: currentSeq,
+                content: content,
+                markdown: markdown,
+                keyboard: keyboard,
+                fileinfo: fileinfo);
+            }
+            else if (ChatType == 2)
+            {
+                await MessageManager.SendC2cMessageAsync(
+                userId: UserOpenid!,
+                eventId: Id,
+                sequence: currentSeq,
+                content: content,
+                markdown: markdown,
+                keyboard: keyboard,
+                fileinfo: fileinfo
+                );
+            }
         }
-        else if(ChatType == 2)
+        finally
         {
-            await MessageManager.SendC2cMessageAsync(
-            userId: UserOpenid!,
-            eventId: Id,
-            sequence: currentSeq,
-            content: content,
-            markdown: markdown,
-            keyboard: keyboard,
-            fileinfo: fileinfo
-            );
+            await MessageManager.ResponedAsync(Id);
         }
-        await MessageManager.ResponedAsync(Id);
     }
 }

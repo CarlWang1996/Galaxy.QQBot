@@ -25,6 +25,7 @@ public class SocketQQBot : IAsyncDisposable
     private readonly Lock _tokenLock = new();
     private Task? _tokenRefreshTask;
     private CancellationTokenSource? _tokenRefreshCts;
+    private int _started;
     public BotMessageManager Messages => _botMessageManager;
     private readonly Subject<C2cEventData> _c2cSubject = new();
     private readonly Subject<GroupEventData> _groupAtSubject = new();
@@ -54,6 +55,24 @@ public class SocketQQBot : IAsyncDisposable
     }
 
     public async Task StartAsync()
+    {
+        if (Interlocked.Exchange(ref _started, 1) == 1)
+        {
+            throw new InvalidOperationException("SocketQQBot 已启动，不能重复调用 StartAsync。");
+        }
+
+        try
+        {
+            await StartCoreAsync();
+        }
+        catch
+        {
+            Interlocked.Exchange(ref _started, 0);
+            throw;
+        }
+    }
+
+    private async Task StartCoreAsync()
     {
         EnsureTokenRefreshLoopStarted();
         await _accessTokenManager.WaitForTokenAsync(_source.Token);
@@ -91,6 +110,17 @@ public class SocketQQBot : IAsyncDisposable
             {
                 failures.Add(ex);
                 _logger.LogError(ex, "shard {id}/{total} 启动失败", i, total);
+
+                try
+                {
+                    await shard.DisposeAsync();
+                }
+                catch (Exception disposeEx)
+                {
+                    _logger.LogWarning(disposeEx, "shard {id}/{total} 释放失败", i, total);
+                }
+
+                _shards.Remove(shard);
             }
         }
 

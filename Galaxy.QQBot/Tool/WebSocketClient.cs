@@ -95,6 +95,19 @@ internal class WebSocketClient
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
+                        if (socket.State == WebSocketState.CloseReceived)
+                        {
+                            try
+                            {
+                                using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                                await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Client closed", closeCts.Token);
+                            }
+                            catch (Exception ex)
+                            {
+                                OnHandlerError?.Invoke(ex);
+                            }
+                        }
+
                         await NotifyDisconnectedOnceAsync($"连接关闭: Code: {(int)result.CloseStatus!}, Reason: {result.CloseStatusDescription}");
                         return;
                     }
@@ -189,12 +202,20 @@ internal class WebSocketClient
     public async Task DisconnectAsync()
     {
         _cts?.Cancel();
+        var socket = _webSocket;
 
-        if (_webSocket?.State == WebSocketState.Open)
+        if (socket != null)
         {
             try
             {
-                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", CancellationToken.None);
+                if (socket.State == WebSocketState.Open)
+                {
+                    await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", CancellationToken.None);
+                }
+                else if (socket.State == WebSocketState.CloseReceived)
+                {
+                    await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Client closed", CancellationToken.None);
+                }
             }
             catch
             {
@@ -202,8 +223,11 @@ internal class WebSocketClient
         }
 
         await StopReceiveLoopAsync();
-        _webSocket?.Dispose();
-        _webSocket = null;
+        socket?.Dispose();
+        if (ReferenceEquals(_webSocket, socket))
+        {
+            _webSocket = null;
+        }
     }
 
     public async ValueTask DisposeAsync()

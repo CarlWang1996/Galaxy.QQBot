@@ -31,6 +31,7 @@ internal sealed class ShardConnection : IAsyncDisposable
 
     private volatile bool _terminal;
     private volatile TaskCompletionSource? _helloTcs;
+    private readonly TaskCompletionSource _readyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private readonly Action<C2cEventData>? _onC2cMessage;
     private readonly Action<GroupEventData>? _onGroupAtMessage;
@@ -61,6 +62,7 @@ internal sealed class ShardConnection : IAsyncDisposable
         _botMessageManager = botMessageManager;
         _context = new BotSessionContext();
         _webSocket = new WebSocketClient();
+        _webSocket.OnHandlerError = ex => _logger.LogError(ex, "[shard {id}/{total}] WebSocket 处理异常", _shardId, _shardTotal);
         _webSocket.OnMessageReceived += HandleMessageAsync;
         _webSocket.OnDisconnected += HandleDisconnectedAsync;
         _heartbeatManager = new HeartbeatManager(_webSocket, _context, factory);
@@ -83,6 +85,7 @@ internal sealed class ShardConnection : IAsyncDisposable
         }
 
         await task;
+        await _readyTcs.Task.WaitAsync(TimeSpan.FromSeconds(30), _linkedSource.Token);
     }
 
     private async Task ConnectAsync()
@@ -175,6 +178,7 @@ internal sealed class ShardConnection : IAsyncDisposable
         if (arg.Contains("4914") || arg.Contains("4915") || arg.Contains("4013") || arg.Contains("4014"))
         {
             _terminal = true;
+            _readyTcs.TrySetCanceled();
             StopHeartbeatLoop();
             _logger.LogError("[shard {id}] 机器人已下架/封禁/Intent 无效或无权限，停止重连。", _shardId);
             return;
@@ -427,6 +431,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                         _logger.LogDebug("[shard {id}] 收到ready信息:{@data}", _shardId, readyData);
                         _logger.LogInformation("登录成功");
                         _context.SessionId = readyData.SessionId;
+                        _readyTcs.TrySetResult();
                         _onReady?.Invoke(readyData);
                     }
                     catch (Exception ex)
@@ -437,6 +442,7 @@ internal sealed class ShardConnection : IAsyncDisposable
 
                 case "RESUMED":
                     _logger.LogDebug("[shard {id}] 重连成功 (RESUMED)，恢复接收事件", _shardId);
+                    _readyTcs.TrySetResult();
                     break;
 
                 case "C2C_MESSAGE_CREATE":
@@ -587,6 +593,7 @@ internal sealed class ShardConnection : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _linkedSource.Cancel();
+        _readyTcs.TrySetCanceled();
         StopHeartbeatLoop();
 
         Task? reconnectTask;
