@@ -24,6 +24,7 @@ internal class WebSocketClient
             return;
         }
 
+        _cts?.Cancel();
         await StopReceiveLoopAsync();
         _url = url;
         _cts?.Dispose();
@@ -176,7 +177,7 @@ internal class WebSocketClient
 
         try 
         {
-            await _receiveTask;
+            await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5));
         }
         catch 
         {

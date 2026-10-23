@@ -25,6 +25,8 @@ internal sealed class ShardConnection : IAsyncDisposable
     private Task? _heartbeatTask;
     private CancellationTokenSource? _heartbeatCts;
 
+    private volatile bool _terminal;
+
     private readonly Action<C2cEventData>? _onC2cMessage;
     private readonly Action<GroupEventData>? _onGroupAtMessage;
     private readonly Action<GroupEventData>? _onGroupMessage;
@@ -125,6 +127,7 @@ internal sealed class ShardConnection : IAsyncDisposable
 
         if (arg.Contains("4914") || arg.Contains("4915") || arg.Contains("4013") || arg.Contains("4014"))
         {
+            _terminal = true;
             _logger.LogError("[shard {id}] 机器人已下架/封禁/Intent 无效或无权限，停止重连。", _shardId);
             return;
         }
@@ -148,7 +151,7 @@ internal sealed class ShardConnection : IAsyncDisposable
             _logger.LogDebug("[shard {id}] 尝试重连...", _shardId);
         }
 
-        await TryReconnectAsync();
+        _ = ReconnectSafeAsync();
     }
 
     private async Task TryReconnectAsync()
@@ -176,6 +179,7 @@ internal sealed class ShardConnection : IAsyncDisposable
                     if (!string.IsNullOrEmpty(_context.SessionId) && _context.LastS != null)
                     {
                         await ResumeAsync();
+                        EnsureHeartbeatLoopStarted();
                         _logger.LogDebug("[shard {id}] 已发起 Resume（第 {retry} 次）", _shardId, retry);
                     }
                     else
@@ -199,6 +203,27 @@ internal sealed class ShardConnection : IAsyncDisposable
         finally
         {
             Interlocked.Exchange(ref _reconnecting, 0);
+
+            if (!_terminal && !_linkedSource.IsCancellationRequested && !_webSocket.IsConnected)
+            {
+                _ = ReconnectSafeAsync();
+            }
+        }
+    }
+
+    private async Task ReconnectSafeAsync()
+    {
+        try
+        {
+            await TryReconnectAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // 正常停止
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[shard {id}] 重连流程异常退出", _shardId);
         }
     }
 
@@ -414,6 +439,11 @@ internal sealed class ShardConnection : IAsyncDisposable
     {
         lock (_heartbeatLock)
         {
+            if(_context.HeartBeatInterval <= 0)
+            {
+                throw new InvalidOperationException("心跳间隔必须大于0");
+            }
+
             if (_heartbeatTask != null && !_heartbeatTask.IsCompleted) return;
 
             _heartbeatCts?.Dispose();
