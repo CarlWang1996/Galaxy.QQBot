@@ -65,10 +65,7 @@ public sealed class BotKeyboardBuilder
         _autoId++;
         button.RenderData.Label = lable;
         button.RenderData.Style = (int)style;
-        if(visitedLabel != null)
-        {
-            button.RenderData.VisitedLabel = visitedLabel;
-        }
+        button.RenderData.VisitedLabel = visitedLabel;
         button.Action.Type = (int)type;
         button.Action.Permission.Type = (int)permission;
         button.Action.Permission.SpecifyUserIds = specifyUserIds;
