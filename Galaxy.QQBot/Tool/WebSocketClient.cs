@@ -188,15 +188,21 @@ internal class WebSocketClient
             return;
         }
 
-        try 
+        try
         {
             await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5));
         }
-        catch 
+        catch (TimeoutException ex)
+        {
+            OnHandlerError?.Invoke(ex);
+        }
+        catch
         {
         }
-
-        _receiveTask = null;
+        finally
+        {
+            _receiveTask = null;
+        }
     }
 
     public async Task DisconnectAsync()

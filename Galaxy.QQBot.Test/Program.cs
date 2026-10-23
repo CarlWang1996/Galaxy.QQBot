@@ -15,7 +15,7 @@ public class Program
         });
         string appId = Environment.GetEnvironmentVariable("BotId", EnvironmentVariableTarget.Machine)!;
         string appSecret = Environment.GetEnvironmentVariable("BotSecret", EnvironmentVariableTarget.Machine)!;
-        SocketQQBot bot = new SocketQQBot(appId, appSecret, loggerFactory);
+        await using SocketQQBot bot = new SocketQQBot(appId, appSecret, loggerFactory);
         bot.GroupAtMessages.Subscribe(s => _ = Task.Run(async () =>
         {
             try

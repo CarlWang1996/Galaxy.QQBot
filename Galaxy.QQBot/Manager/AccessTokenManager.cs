@@ -26,6 +26,11 @@ internal class AccessTokenManager
         {
             lock (_sync)
             {
+                if (string.IsNullOrEmpty(_accessToken))
+                {
+                    throw new InvalidOperationException("AccessToken 尚未就绪，请先启动 Bot 并等待 Token 获取成功。");
+                }
+
                 return _accessToken;
             }
         }
@@ -67,7 +72,7 @@ internal class AccessTokenManager
         {
             try
             {
-                var result = await _httpHelper.PostAsyncWithOutToken($"{Constants.BaseUrl}app/getAppAccessToken", new { appId, clientSecret }, clt);
+                var result = await _httpHelper.PostAsyncWithoutToken($"{Constants.BaseUrl}app/getAppAccessToken", new { appId, clientSecret }, clt);
                 using var doc = JsonDocument.Parse(result);
                 var root = doc.RootElement;
 

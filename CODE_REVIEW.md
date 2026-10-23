@@ -1,10 +1,10 @@
 # 项目代码审查报告（第二轮·更新）
 
 - 项目：Galaxy.QQBot
-- 审查范围：`Galaxy.QQBot`、`Galaxy.QQBot.Test`（`Galaxy.QQBot.DependencyInjection` 已无源码且不在解决方案中）
-- 审查日期：2026-10-23（心跳、密钥、5 秒保护及轻微问题 1-10 修复后复核）
+- 审查范围：`Galaxy.QQBot`、`Galaxy.QQBot.Test`（`Galaxy.QQBot.DependencyInjection` 已删除）
+- 审查日期：2026-10-23（轻微问题 1-19 修复后复核）
 - 构建结果：解决方案编译通过，0 警告 0 错误（使用临时 `OutputPath` 避免运行中 `Galaxy.QQBot.dll` 被占用）
-- 说明：本轮仍以只读审查为主；本文档汇总第一轮修复情况与当前仍存在的问题。
+- 说明：本文档汇总审查与修复情况。
 
 ---
 
@@ -18,14 +18,15 @@
 - **5 秒保护未真正限时**：已改为 `await _receiveTask.WaitAsync(TimeSpan.FromSeconds(5))`（`WebSocketClient.cs:180`）。
 - **轻微问题 1-5**：`LastS` 原子化、`expires_in` 兼容解析、启动 token 失败重试、等待 `Hello` 后 `Identify`、`DisposeAsync` 等待刷新任务并释放 `_readySubject`。
 - **轻微问题 6-10**：`StartAsync` 幂等并等待 `READY`、WebSocket 连接使用取消令牌、补全关闭握手、接线 `OnHandlerError`、交互事件在 `finally` 中 ACK。
+- **轻微问题 11-18**：上传/哈希单次读取与取消令牌、确认 `message_scene.ext`、清理空项目与测试依赖、统一命名与哈希工具、token 空值保护、接收循环超时日志、心跳默认间隔。
 
-当前无“严重”和“中等”问题，剩余均为轻微 / 代码质量问题（约 8 项），可按迭代清理。
+当前“严重”“中等”“轻微 / 代码质量”问题均已清理。
 
 | 级别 | 数量 |
 | --- | --- |
 | 严重 | 0 |
 | 中等 | 0 |
-| 轻微 / 代码质量 | 约 8 |
+| 轻微 / 代码质量 | 0 |
 
 ---
 
@@ -110,19 +111,19 @@
 7. **WebSocket 连接未使用 shard 的取消令牌 —— ✅ 已修复（代码中已生效）**：`ShardConnection.ConnectAsync` 调用 `_webSocket.ConnectAsync(response.url, _linkedSource.Token)`，gateway 请求也传入同一令牌。
 8. **关闭握手未完成 —— ✅ 已修复**：接收循环收到 Close 且状态为 `CloseReceived` 时调用 `CloseOutputAsync`（5 秒超时）；`DisconnectAsync` 同样处理 `CloseReceived`，并用局部 socket 避免并发置空新连接。
 9. **`OnHandlerError` 未接线 —— ✅ 已修复**：`ShardConnection` 构造时将其接到 logger，消息处理器、断开回调、关闭握手中的异常都会被记录。
-10. **交互事件先发消息后 ACK —— ✅ 已修复**：`InteractionEventData.ReplyAsync` 将发送逻辑包在 `try/finally`，无论发送成功与否都会调用 `ResponedAsync(Id)`。
-11. **上传/哈希细节**：
-    - `BotMessageManager.cs:139` 的 `isLastBlock` 声明后未使用；
-    - `ReadFullyAsync`（`BotMessageManager.cs:180-195`）未接收取消令牌；
-    - `mergeResp?.FileInfo!`（`:176-177`）在响应异常时可能返回 null 却标记为非空；
-    - 计算 md5 / sha1 / md5_10m 需要完整读取文件约 2.5 遍（`BotMessageManager.cs:107-109`），可合并为单次读取。
-12. **`message_scene.ext` 仍按 `string[]` 建模**：`Models/Common/BotMessageScene.cs:10-11`。目前官方示例是数组，风险较低，但建议确认元素类型。
-13. **遗留空项目**：`Galaxy.QQBot.DependencyInjection/` 只剩 csproj、无源码且不在 `Galaxy.QQBot.slnx` 中，建议删除或恢复实现。
-14. **测试项目清理**：`Galaxy.QQBot.Test/Galaxy.QQBot.Test.csproj` 仍引用 `Microsoft.Extensions.Hosting`、`Serilog.AspNetCore` 等未使用的包；`Program.cs:18-25` 未 `await using` bot，`Console.Read()` 后没有优雅释放。
-15. **命名/结构**：`ResponedAsync` 应为 `RespondedAsync`（`BotMessageManager.cs:91`）；`PostAsyncWithOutToken` 应为 `WithoutToken`（`HttpHelper.cs:67`）；`FileMd5Helper`/`FileHashHelper` 重复且位于全局命名空间，建议合并到 `Galaxy.QQBot.Tool`。
-16. **`BotMessageManager` / `AccessTokenManager` 直接读取 `AccessToken`**：在未启动或 token 过期瞬间可能为空字符串，建议发送前确保 token 可用。
-17. **`StopReceiveLoopAsync` 超时后静默继续**：`WebSocketClient.cs:178-186` 的 `catch { }` 会在 5 秒超时后照样把 `_receiveTask` 置 null，旧接收循环可能仍在运行，随后访问已释放的 socket 再抛异常退出。不会再死锁，但建议至少对 `TimeoutException` 记录一条警告。
-18. **`EnsureHeartbeatLoopStarted` 抛异常的副作用**：`ShardConnection.cs:458-465` 在 `HeartBeatInterval <= 0` 时抛 `InvalidOperationException`。这消除了 `Task.Delay(0)` 紧循环，但如果 `Hello` 解析失败后收到 `READY`，异常会让整个 READY 处理中断（SessionId 不会被设置）。建议改为“记录警告 + 使用默认间隔（如 30s）”而不是抛异常。
+10. **交互事件先发消息后 ACK —— ✅ 已修复**：`InteractionEventData.ReplyAsync` 将发送逻辑包在 `try/finally`，无论发送成功与否都会调用 `RespondedAsync(Id)`。
+11. **上传/哈希细节 —— ✅ 已修复**：
+    - `isLastBlock` 已在当前代码中移除；
+    - `ReadFullyAsync` 已接收取消令牌，公共发送接口也新增可选 `CancellationToken`；
+    - 合并响应缺少 `file_info` 时抛出 `InvalidOperationException`；
+    - md5 / sha1 / md5_10m 改为单次读取同时计算（`FileHashHelper.ComputeAsync`）。
+12. **`message_scene.ext` 仍按 `string[]` 建模 —— ✅ 已确认**：官方示例与腾讯 SDK 类型均为 `string[]`，当前建模正确。
+13. **遗留空项目 —— ✅ 已处理**：`Galaxy.QQBot.DependencyInjection/` 已不存在。
+14. **测试项目清理 —— ✅ 已修复**：移除未使用的 `Microsoft.Extensions.Hosting`、`Serilog.AspNetCore`；`Program.cs` 改为 `await using`，退出时优雅释放。
+15. **命名/结构 —— ✅ 已修复**：`ResponedAsync` → `RespondedAsync`；`PostAsyncWithOutToken` → `PostAsyncWithoutToken`；`FileMd5Helper` 合并进 `Galaxy.QQBot.Tool.FileHashHelper`，不再位于全局命名空间。
+16. **直接读取 `AccessToken` —— ✅ 已修复**：`AccessToken` getter 在 token 为空时抛出明确的 `InvalidOperationException`，避免用空 token 发请求。
+17. **`StopReceiveLoopAsync` 超时后静默继续 —— ✅ 已修复**：超时通过 `OnHandlerError` 记录日志，`_receiveTask` 仍在 `finally` 中清理。
+18. **`EnsureHeartbeatLoopStarted` 抛异常的副作用 —— ✅ 已修复**：心跳间隔无效时记录警告并使用默认 30 秒，不再中断 READY 处理。
 19. **重连任务无法在 Dispose 时等待 —— ✅ 已修复**：`ShardConnection` 保存 `_reconnectTask`，`DisposeAsync` 先取消再等待其退出，并再次停止心跳；同时 WebSocket 连接与 gateway 请求使用取消令牌，避免释放资源时仍有重连流程在跑。
 
 ---
@@ -131,7 +132,7 @@
 
 以下问题在当前代码中已确认修复：
 
-- ✅ **断线重连自锁死**：已通过 `_ = ReconnectSafeAsync()`、`_cts?.Cancel()` 前置、`StopReceiveLoopAsync` 等待保护解决（残留见轻微问题 17、19）。
+- ✅ **断线重连自锁死**：已通过 `_ = ReconnectSafeAsync()`、`_cts?.Cancel()` 前置、`StopReceiveLoopAsync` 等待保护解决（残留的轻微问题 17、19 已修复）。
 - ✅ **重连 Task 未观察**：已改为 `ReconnectSafeAsync()` 包装并在外层记录异常（`ShardConnection.cs:154`、`:234`）。
 - ✅ **重连窗口期丢断开通知**：`finally` 中复位 guard 后已补一次 `IsConnected` 检查（`ShardConnection.cs:223-230`）。
 - ✅ **重连兜底绕过终态码**：已增加 `_terminal` 标记并在 `finally` 中排除（`ShardConnection.cs:129-135`、`:227`）。
@@ -149,7 +150,7 @@
 - ✅ `GroupEventData` / `BotMsgElement` 字段不反序列化：已全部改为带 `[JsonPropertyName]` 的属性。
 - ✅ WebSocketClient 空二进制心跳：已删除，统一由 HeartbeatManager 发送 op1。
 - ✅ 每次 READY 重复启动心跳：已通过 `_heartbeatTask` 判重。
-- ✅ 心跳间隔为 0 的紧循环风险：已通过启动前校验消除（副作用见轻微问题 18）。
+- ✅ 心跳间隔为 0 的紧循环风险：已通过启动前校验消除；无效间隔现在回退到默认 30 秒。
 - ✅ 每次 Connect 重复启动 token 刷新：已通过 `_tokenRefreshTask` 判重。
 - ✅ TCS 永久 faulted：失败后会重建 TCS。
 - ✅ 分块上传单次 `ReadAsync` 读不满：已改为 `ReadFullyAsync` 并校验分块/总大小。
@@ -158,11 +159,11 @@
 - ✅ op1 / op7 / op9 未处理：均已实现。
 - ✅ 分片只连 shard 0：已按 `shards` 循环建立连接。
 - ✅ HTTP 请求/响应未释放：已改为 `using`。
-- ✅ DI 生命周期错配：DI 项目已移除（遗留空目录待清理）。
+- ✅ DI 生命周期错配：DI 项目及遗留目录已移除。
 - ✅ 4914/4915 被内部重连：WebSocketClient 不再自动重连；终态心跳已在问题 4 修复。
 
 ---
 
-## 五、建议修复优先级
+## 五、后续建议
 
-1. 其余轻微问题按迭代逐步清理（见第三节）。
+1. 当前审查发现的问题已全部处理；后续可按需补充单元测试、集成测试与使用文档。

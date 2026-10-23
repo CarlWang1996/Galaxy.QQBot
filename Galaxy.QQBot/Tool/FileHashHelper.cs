@@ -1,18 +1,15 @@
 ﻿using System.Security.Cryptography;
 
+namespace Galaxy.QQBot.Tool;
+
 internal static class FileHashHelper
 {
     public const long DefaultMaxBytes = 10_002_432;
     private const int BufferSize = 81920;
 
-    public static async Task<string> GetFileSha1Async(string filePath, CancellationToken cancellationToken = default)
-    {
-        using var sha1 = SHA1.Create();
-        await HashPartialAsync(sha1, filePath, maxBytes: null, cancellationToken).ConfigureAwait(false);
-        return ToHexLower(sha1.Hash!);
-    }
+    public readonly record struct FileHashes(string Md5, string Sha1, string Md510m);
 
-    private static async Task HashPartialAsync(HashAlgorithm algorithm, string filePath, long? maxBytes, CancellationToken cancellationToken)
+    public static async Task<FileHashes> ComputeAsync(string filePath, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(filePath))
         {
@@ -24,25 +21,41 @@ internal static class FileHashHelper
             throw new FileNotFoundException("文件不存在", filePath);
         }
 
-        long limit = (maxBytes is null || maxBytes <= 0) ? long.MaxValue : maxBytes.Value;
+        using var md5 = MD5.Create();
+        using var sha1 = SHA1.Create();
+        using var partialMd5 = MD5.Create();
         using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, BufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        long remaining = Math.Min(fs.Length, limit);
+        long partialRemaining = Math.Min(fs.Length, DefaultMaxBytes);
         byte[] buffer = new byte[BufferSize];
-        while (remaining > 0)
+
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            int toRead = (int)Math.Min(buffer.Length, remaining);
-            int read = await fs.ReadAsync(buffer.AsMemory(0, toRead), cancellationToken).ConfigureAwait(false);
+            int read = await fs.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
             if (read == 0)
             {
                 break;
             }
 
-            algorithm.TransformBlock(buffer, 0, read, null, 0);
-            remaining -= read;
+            md5.TransformBlock(buffer, 0, read, null, 0);
+            sha1.TransformBlock(buffer, 0, read, null, 0);
+
+            if (partialRemaining > 0)
+            {
+                int partialCount = (int)Math.Min(read, partialRemaining);
+                partialMd5.TransformBlock(buffer, 0, partialCount, null, 0);
+                partialRemaining -= partialCount;
+            }
         }
 
-        algorithm.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+        md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+        sha1.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+        partialMd5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+
+        return new FileHashes(
+            ToHexLower(md5.Hash!),
+            ToHexLower(sha1.Hash!),
+            ToHexLower(partialMd5.Hash!));
     }
 
     private static string ToHexLower(byte[] hash)

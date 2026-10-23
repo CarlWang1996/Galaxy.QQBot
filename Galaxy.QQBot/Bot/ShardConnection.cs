@@ -9,6 +9,7 @@ namespace Galaxy.QQBot.Bot;
 internal sealed class ShardConnection : IAsyncDisposable
 {
     private const int InitialConnectMaxAttempts = 5;
+    private const int DefaultHeartbeatInterval = 30_000;
 
     private record GatewayResponse(string url);
     private record HelloData(int heartbeat_interval);
@@ -538,7 +539,8 @@ internal sealed class ShardConnection : IAsyncDisposable
 
             if (_context.HeartBeatInterval <= 0)
             {
-                throw new InvalidOperationException("心跳间隔必须大于0");
+                _logger.LogWarning("[shard {id}] 心跳间隔无效（{interval}ms），使用默认值 {default}ms", _shardId, _context.HeartBeatInterval, DefaultHeartbeatInterval);
+                _context.HeartBeatInterval = DefaultHeartbeatInterval;
             }
 
             if (_heartbeatTask != null && !_heartbeatTask.IsCompleted) return;

@@ -45,7 +45,7 @@ public record class InteractionEventData
 
     private int _seq = 0;
 
-    public async Task ReplyAsync(string? content = null, BotMarkdown? markdown = null, BotKeyboard? keyboard = null, BotFileInfo? fileinfo = null)
+    public async Task ReplyAsync(string? content = null, BotMarkdown? markdown = null, BotKeyboard? keyboard = null, BotFileInfo? fileinfo = null, CancellationToken cancellationToken = default)
     {
         if (MessageManager == null)
         {
@@ -64,7 +64,8 @@ public record class InteractionEventData
                 content: content,
                 markdown: markdown,
                 keyboard: keyboard,
-                fileinfo: fileinfo);
+                fileinfo: fileinfo,
+                cancellationToken: cancellationToken);
             }
             else if (ChatType == 2)
             {
@@ -75,13 +76,14 @@ public record class InteractionEventData
                 content: content,
                 markdown: markdown,
                 keyboard: keyboard,
-                fileinfo: fileinfo
+                fileinfo: fileinfo,
+                cancellationToken: cancellationToken
                 );
             }
         }
         finally
         {
-            await MessageManager.ResponedAsync(Id);
+            await MessageManager.RespondedAsync(Id);
         }
     }
 }

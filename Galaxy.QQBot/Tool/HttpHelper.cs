@@ -64,7 +64,7 @@ internal class HttpHelper : IDisposable
         return await SendAsync(request, cancellationToken);
     }
 
-    public async Task<string> PostAsyncWithOutToken<T>(string url, T data, CancellationToken cancellationToken = default)
+    public async Task<string> PostAsyncWithoutToken<T>(string url, T data, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Content = JsonContent.Create(data, options: JsonHelper.Options);

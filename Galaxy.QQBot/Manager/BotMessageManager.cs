@@ -24,9 +24,10 @@ public class BotMessageManager
         int? sequence = null,
         BotFileInfo? fileinfo = null,
         BotMarkdown? markdown = null,
-        BotKeyboard? keyboard = null)
+        BotKeyboard? keyboard = null,
+        CancellationToken cancellationToken = default)
     {
-        return SendMessageAsync("user", userId, content, messageId, eventId, sequence, fileinfo, markdown, keyboard);
+        return SendMessageAsync("user", userId, content, messageId, eventId, sequence, fileinfo, markdown, keyboard, cancellationToken);
     }
 
     public Task SendGroupMessageAsync(
@@ -37,9 +38,10 @@ public class BotMessageManager
         int? sequence = null,
         BotFileInfo? fileinfo = null,
         BotMarkdown? markdown = null,
-        BotKeyboard? keyboard = null)
+        BotKeyboard? keyboard = null,
+        CancellationToken cancellationToken = default)
     {
-        return SendMessageAsync("group", groupId, content, messageId, eventId, sequence, fileinfo, markdown, keyboard);
+        return SendMessageAsync("group", groupId, content, messageId, eventId, sequence, fileinfo, markdown, keyboard, cancellationToken);
     }
 
     private async Task SendMessageAsync(
@@ -51,10 +53,12 @@ public class BotMessageManager
         int? sequence,
         BotFileInfo? fileinfo,
         BotMarkdown? markdown,
-        BotKeyboard? keyboard)
+        BotKeyboard? keyboard,
+        CancellationToken cancellationToken)
     {
         string urlType = type == "user" ? "users" : "groups";
         string url = $"{Constants.BaseUrl}v2/{urlType}/{id}/messages";
+        string accessToken = _accessTokenManager.AccessToken;
 
         var request = new SendBotMessageRequest
         {
@@ -65,7 +69,7 @@ public class BotMessageManager
 
         if (fileinfo != null)
         {
-            string info = await UploadFileAsync(type, id, fileinfo.FilePath, fileinfo.FileType,fileinfo.SrvSendMessage);
+            string info = await UploadFileAsync(type, id, fileinfo.FilePath, fileinfo.FileType, fileinfo.SrvSendMessage, accessToken, cancellationToken);
             request.MsgType = 7;
             request.Media = new BotMediaInfo { FileInfo = info };
         }
@@ -85,31 +89,33 @@ public class BotMessageManager
             throw new NotSupportedException("消息内容不能全为空（content / markdown / filePath 必须传一个）");
         }
 
-        await _httpHelper.PostAsync(url, _accessTokenManager.AccessToken, request);
+        await _httpHelper.PostAsync(url, accessToken, request, cancellationToken);
     }
 
-    public async Task ResponedAsync(string eventId)
+    public async Task RespondedAsync(string eventId, CancellationToken cancellationToken = default)
     {
         string url = $"{Constants.BaseUrl}interactions/{eventId}";
-        await _httpHelper.PutAsync(url, _accessTokenManager.AccessToken, new { code = 0 });
+        string accessToken = _accessTokenManager.AccessToken;
+        await _httpHelper.PutAsync(url, accessToken, new { code = 0 }, cancellationToken);
     }
 
-    private async Task<string> UploadFileAsync(string type, string targetId, string filePath, int fileType, bool sendMsg = false)
+    private async Task<string> UploadFileAsync(string type, string targetId, string filePath, int fileType, bool sendMsg, string accessToken, CancellationToken cancellationToken)
     {
         string urlType = type == "user" ? "users" : "groups";
         string baseUrl = $"{Constants.BaseUrl}v2/{urlType}/{targetId}";
         var fileInfo = new FileInfo(filePath);
+        var hashes = await FileHashHelper.ComputeAsync(filePath, cancellationToken);
         var prepareReq = new BotUploadPrepareRequest
         {
             FileName = Path.GetFileName(filePath),
             FileSize = fileInfo.Length.ToString(),
             FileType = fileType,
-            Md5 = await FileMd5Helper.GetFullMd5Async(filePath),
-            Sha1 = await FileHashHelper.GetFileSha1Async(filePath),
-            Md510m = await FileMd5Helper.GetPartialMd5Async(filePath)
+            Md5 = hashes.Md5,
+            Sha1 = hashes.Sha1,
+            Md510m = hashes.Md510m
         };
 
-        string prepareJson = await _httpHelper.PostAsync($"{baseUrl}/upload_prepare", _accessTokenManager.AccessToken, prepareReq);
+        string prepareJson = await _httpHelper.PostAsync($"{baseUrl}/upload_prepare", accessToken, prepareReq, cancellationToken);
         var prepareResp = JsonHelper.DeserializeElement<BotUploadPrepareResponse>(prepareJson)!;
         var parts = prepareResp.Parts.OrderBy(s => s.Index).ToList();
         if (parts.Count == 0)
@@ -136,25 +142,24 @@ public class BotMessageManager
         {
             var block = parts[i];
             int expectedSize = int.Parse(block.BlockSize);
-            bool isLastBlock = i == parts.Count - 1;
             byte[] blockBuffer = new byte[expectedSize];
-            int n = await ReadFullyAsync(stream, blockBuffer, 0, expectedSize);
+            int n = await ReadFullyAsync(stream, blockBuffer, 0, expectedSize, cancellationToken);
 
             if (n != expectedSize)
             {
                 throw new InvalidOperationException($"分块 {block.Index} 读取不完整：期望 {expectedSize} 字节，实际 {n} 字节。");
             }
 
-            await _httpHelper.PutAsyncWithoutToken(block.PresignedUrl, blockBuffer);
+            await _httpHelper.PutAsyncWithoutToken(block.PresignedUrl, blockBuffer, cancellationToken);
             string blockMd5 = Convert.ToHexString(md5.ComputeHash(blockBuffer)).ToLowerInvariant();
 
-            await _httpHelper.PostAsync($"{baseUrl}/upload_part_finish",_accessTokenManager.AccessToken, new
+            await _httpHelper.PostAsync($"{baseUrl}/upload_part_finish", accessToken, new
                 {
                     upload_id = prepareResp.UploadId,
                     part_index = block.Index,
                     block_size = n.ToString(),
                     md5 = blockMd5
-                });
+                }, cancellationToken);
 
             uploadedTotal += n;
         }
@@ -172,17 +177,22 @@ public class BotMessageManager
             file_name = Path.GetFileName(filePath)
         };
 
-        string mergeJson = await _httpHelper.PostAsync($"{baseUrl}/files", _accessTokenManager.AccessToken, mergeReq);
+        string mergeJson = await _httpHelper.PostAsync($"{baseUrl}/files", accessToken, mergeReq, cancellationToken);
         var mergeResp = JsonHelper.DeserializeElement<BotUploadResponse>(mergeJson);
-        return mergeResp?.FileInfo!;
+        if (mergeResp == null || string.IsNullOrEmpty(mergeResp.FileInfo))
+        {
+            throw new InvalidOperationException("上传合并响应缺少 file_info。");
+        }
+
+        return mergeResp.FileInfo;
     }
 
-    private static async Task<int> ReadFullyAsync(Stream stream, byte[] buffer, int offset, int count)
+    private static async Task<int> ReadFullyAsync(Stream stream, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
         int totalRead = 0;
         while (totalRead < count)
         {
-            int read = await stream.ReadAsync(buffer.AsMemory(offset + totalRead, count - totalRead));
+            int read = await stream.ReadAsync(buffer.AsMemory(offset + totalRead, count - totalRead), cancellationToken);
             if (read == 0)
             {
                 break;
