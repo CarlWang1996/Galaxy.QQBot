@@ -5,18 +5,18 @@ namespace Galaxy.QQBot.Models.Message;
 public class BotKeyboard
 {
     [JsonPropertyName("content")]
-    public BotKeyboardContent? Content { get; set; } = null;
+    public BotKeyboardContent Content { get; set; } = new BotKeyboardContent();
 }
 
 public class BotKeyboardContent
 {
     [JsonPropertyName("rows")]
-    public BotKeyboardRow[]? Rows { get; set; } = null;
+    public List<BotKeyboardRow> Rows { get; set; } = [];
 }
 public class BotKeyboardRow
 {
     [JsonPropertyName("buttons")]
-    public BotKeyboardButton[]? Buttons { get; set; } = null;
+    public List<BotKeyboardButton> Buttons { get; set; } = [];
 }
 
 public class BotKeyboardButton
@@ -25,10 +25,10 @@ public class BotKeyboardButton
     public string? Id { get; set; } = null;
 
     [JsonPropertyName("render_data")]
-    public BotKeyboardRenderData? RenderData { get; set; } = null;
+    public BotKeyboardRenderData RenderData { get; set; } = new BotKeyboardRenderData();
 
     [JsonPropertyName("action")]
-    public BotKeyboardAction? Action { get; set; } = null;
+    public BotKeyboardAction Action { get; set; } = new BotKeyboardAction();
 
     [JsonPropertyName("group_id")]
     public string? GroupId { get; set; } = null;
@@ -52,7 +52,7 @@ public class BotKeyboardAction
     public int? Type { get; set; } = null;
 
     [JsonPropertyName("permission")]
-    public BotKeyboardPermission? Permission { get; set; } = null;
+    public BotKeyboardPermission Permission { get; set; } = new BotKeyboardPermission();
 
     [JsonPropertyName("data")]
     public string? Data { get; set; } = null;
