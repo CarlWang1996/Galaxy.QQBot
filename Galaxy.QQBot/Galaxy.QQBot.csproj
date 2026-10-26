@@ -4,6 +4,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PackageId>Galaxy.QQBot</PackageId>
+    <Version>0.0.1</Version>
+    <Authors>银河Galaxy</Authors>
+    <Company></Company>
+    <Description>.net10实现的QQ官方机器人架子，目前仅支持websocket私聊、群聊以及按钮响应</Description>
+    <PackageTags>QQ;Bot</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
