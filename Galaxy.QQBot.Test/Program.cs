@@ -20,7 +20,7 @@ public class Program
         {
             try
             {
-                await s.ReplyAsync(markdown:"# 123\r\n你特么就是个大猪蹄子");
+                await s.ReplyAsync(markdown:"# 测试消息\r\n测试正文");
             }
             catch (Exception ex)
             {
